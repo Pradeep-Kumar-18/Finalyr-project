@@ -1,0 +1,233 @@
+/* --- NUTRITION ADVISOR --- */
+.nutrition-advisor-view {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 60px;
+}
+
+.advisor-header {
+  margin-bottom: 24px;
+}
+
+.advisor-header h2 {
+  font-size: 2rem;
+  font-weight: 300;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, #fff, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.advisor-header p {
+  color: var(--accent-cyan);
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+}
+
+.health-tip-banner {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  padding: 16px 20px;
+  border-radius: 12px;
+  color: #e2e8f0;
+  font-size: 0.95rem;
+}
+
+.health-tip-banner strong {
+  color: var(--accent-cyan);
+}
+
+.food-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.glass-card-na {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  padding: 24px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.food-card:hover {
+  transform: translateY(-8px) scale(1.01);
+  border-color: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.4);
+}
+
+.food-card.expanded {
+  grid-column: span 2;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--accent-cyan-30);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+}
+
+@media (max-width: 768px) {
+  .food-card.expanded {
+    grid-column: span 1;
+  }
+}
+
+
+.food-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.food-icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid;
+}
+
+.food-category {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #64748b;
+  letter-spacing: 1px;
+}
+
+.food-name {
+  color: white;
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.iron-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(225, 29, 72, 0.1);
+  color: var(--accent-red);
+  padding: 4px 12px;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  margin-bottom: 16px;
+  width: fit-content;
+}
+
+.food-benefits {
+  color: #94a3b8;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  flex: 1;
+  margin-bottom: 20px;
+}
+
+.learn-more-link {
+  background: transparent;
+  border: none;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.learn-more-link.active {
+  color: white;
+}
+
+.expanded-details {
+  overflow: hidden;
+}
+
+.details-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.1), transparent);
+  margin: 16px 0;
+}
+
+.detailed-text {
+  color: #cbd5e1;
+  font-size: 0.95rem;
+  line-height: 1.7;
+  margin-bottom: 20px;
+}
+
+.nutrient-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.nutrient-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 12px;
+  border-radius: 8px;
+  color: #94a3b8;
+  font-size: 0.8rem;
+}
+
+.text-ruby {
+  color: var(--accent-red);
+}
+
+
+.section-title {
+  color: white;
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+  border-left: 3px solid var(--accent-red);
+  padding-left: 12px;
+}
+
+.avoid-items {
+  display: flex;
+  gap: 20px;
+}
+
+.avoid-item {
+  flex: 1;
+}
+
+.avoid-item strong {
+  display: block;
+  color: white;
+  font-size: 1rem;
+  margin-bottom: 6px;
+}
+
+.avoid-item span {
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.icon-green { color: #10b981; }
+.icon-ruby { color: #e11d48; }
+.icon-red { color: #ef4444; }
+.icon-orange { color: #f59e0b; }
+.icon-purple { color: #8b5cf6; }
+
+.mb-6 { margin-bottom: 1.5rem; }
+.mt-10 { margin-top: 2.5rem; }

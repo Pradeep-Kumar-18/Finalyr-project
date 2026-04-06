@@ -1,0 +1,264 @@
+/* --- HEALTH TRACKER --- */
+.health-tracker-view {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 60px;
+}
+
+.tracker-header {
+  margin-bottom: 24px;
+}
+
+.tracker-header h2 {
+  font-size: 2rem;
+  font-weight: 300;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, #fff, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.tracker-header p {
+  color: var(--accent-cyan);
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+}
+
+/* Summary Cards */
+.summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.summary-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.card-label {
+  color: #64748b;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.card-value-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card-big-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: white;
+}
+
+.card-unit { color: var(--accent-cyan); font-size: 1rem; }
+.text-green { color: #10b981 !important; }
+.text-red { color: #ef4444 !important; }
+.trend-up { color: #10b981; }
+.trend-down { color: #ef4444; }
+.icon-cyan { color: var(--accent-cyan); }
+
+.status-pill-tracker {
+  padding: 6px 16px;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.status-pill-tracker.normal {
+  background: rgba(16, 185, 129, 0.1);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.2);
+}
+
+/* Chart Container */
+.glass-card-tracker {
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 30px;
+}
+
+.chart-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.chart-top-bar h4 {
+  color: white;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.forecast-btn {
+  background: rgba(6, 182, 212, 0.1);
+  border: 1px solid rgba(6, 182, 212, 0.4);
+  color: var(--accent-cyan);
+  padding: 8px 18px;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.3s;
+}
+
+.forecast-btn:hover, .forecast-btn.active {
+  background: var(--accent-cyan);
+  color: #09090b;
+  box-shadow: 0 0 15px rgba(6, 182, 212, 0.5);
+}
+
+/* Chart */
+.chart-area {
+  position: relative;
+  display: flex;
+  gap: 10px;
+}
+
+.y-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #475569;
+  font-size: 0.75rem;
+  padding: 0 8px 0 0;
+  min-width: 30px;
+}
+
+.chart-svg {
+  flex: 1;
+  height: 250px;
+}
+
+.grid-line {
+  stroke: rgba(255, 255, 255, 0.05);
+  stroke-width: 1;
+}
+
+.normal-band {
+  fill: rgba(16, 185, 129, 0.04);
+}
+
+.data-line {
+  stroke: var(--accent-cyan);
+  stroke-width: 3;
+  filter: drop-shadow(0 0 6px var(--accent-cyan));
+  stroke-dasharray: 2000;
+  stroke-dashoffset: 2000;
+  animation: drawChart 2s ease-out forwards;
+}
+
+.data-area {
+  fill: url(#areaGradient);
+  opacity: 0;
+  animation: fadeInArea 1s 1.5s forwards;
+}
+
+@keyframes drawChart {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes fadeInArea {
+  to { opacity: 0.3; }
+}
+
+.forecast-line {
+  stroke: var(--accent-cyan);
+  stroke-width: 2;
+  stroke-dasharray: 8 6;
+  opacity: 0.6;
+  filter: drop-shadow(0 0 4px var(--accent-cyan));
+  animation: drawChart 1s 0.5s ease-out forwards;
+  stroke-dashoffset: 500;
+}
+
+.data-point {
+  fill: var(--accent-cyan);
+  stroke: #09090b;
+  stroke-width: 3;
+  cursor: pointer;
+  transition: all 0.2s;
+  filter: drop-shadow(0 0 4px var(--accent-cyan));
+}
+
+.data-point:hover {
+  r: 9;
+  filter: drop-shadow(0 0 10px var(--accent-cyan));
+}
+
+.forecast-point {
+  fill: transparent;
+  stroke: var(--accent-cyan);
+  stroke-width: 2;
+  stroke-dasharray: 4 2;
+  opacity: 0.6;
+}
+
+/* Tooltip */
+.chart-tooltip {
+  position: absolute;
+  background: rgba(15, 23, 42, 0.9);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(6, 182, 212, 0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+  pointer-events: none;
+  z-index: 100;
+  transform: translate(-50%, -100%);
+  animation: tooltipPop 0.2s ease-out;
+}
+
+.chart-tooltip strong {
+  color: white;
+  font-size: 1.1rem;
+  display: block;
+}
+
+.chart-tooltip span {
+  color: #64748b;
+  font-size: 0.8rem;
+}
+
+@keyframes tooltipPop {
+  from { opacity: 0; transform: translate(-50%, -90%); }
+  to { opacity: 1; transform: translate(-50%, -100%); }
+}
+
+/* X-axis */
+.x-axis {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 40px 0;
+  color: #475569;
+  font-size: 0.75rem;
+}
+
+.forecast-label {
+  color: var(--accent-cyan);
+  opacity: 0.6;
+  font-style: italic;
+}
+
+@media (max-width: 900px) {
+  .summary-cards { grid-template-columns: repeat(2, 1fr); }
+}

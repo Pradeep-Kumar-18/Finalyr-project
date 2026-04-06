@@ -1,0 +1,23 @@
+# Dependency directories
+**/node_modules/
+
+# Environment variables
+**/.env
+
+# Uploaded diagnostic images
+Finalyear-Project-Back-end/uploads/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+dist/
+build/
+.next/
+out/

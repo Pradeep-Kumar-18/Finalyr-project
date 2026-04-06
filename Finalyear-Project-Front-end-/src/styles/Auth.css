@@ -1,0 +1,455 @@
+/* Auth Layout & Split Screen */
+.auth-container {
+  display: flex;
+  min-height: 100vh;
+  width: 100vw;
+  background-color: var(--bg-color); /* #0F172A */
+  color: white;
+  overflow: hidden;
+}
+
+/* LEFT SIDE: 3D Anatomical Visuals */
+.auth-visuals {
+  flex: 1;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-right: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: 10px 0 50px rgba(0, 0, 0, 0.3);
+  z-index: 2;
+}
+
+.ambient-glow {
+  position: absolute;
+  width: 150%;
+  height: 150%;
+  background: radial-gradient(circle at center, rgba(15, 23, 42, 0) 20%, #0F172A 80%);
+  z-index: 3;
+}
+
+.frosted-overlay {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 2;
+  background: rgba(15, 23, 42, 0.2);
+}
+
+/* Abstract structures (Cells & Blood) */
+.floating-cell {
+  position: absolute;
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  background: radial-gradient(circle at 30% 30%, #E11D48, #9f1239, #4c0519);
+  box-shadow: 
+    inset 10px 10px 20px rgba(255, 255, 255, 0.2),
+    inset -10px -10px 30px rgba(0, 0, 0, 0.6),
+    0 20px 40px rgba(225, 29, 72, 0.4);
+  filter: blur(1px) drop-shadow(0 0 10px rgba(225, 29, 72, 0.3));
+  z-index: 1;
+  animation: organicFloat 12s ease-in-out infinite alternate;
+}
+
+.cell-1 {
+  width: 200px; height: 180px;
+  top: 20%; left: 15%;
+  animation-delay: 0s;
+}
+
+.cell-2 {
+  width: 150px; height: 160px;
+  top: 60%; right: 20%;
+  animation-delay: -3s;
+  background: radial-gradient(circle at 30% 30%, #f43f5e, #be123c, #881337);
+}
+
+.cell-3 {
+  width: 300px; height: 320px;
+  top: 40%; left: -10%;
+  animation-delay: -6s;
+  opacity: 0.8;
+  filter: blur(4px);
+}
+
+@keyframes organicFloat {
+  0% { transform: translate(0, 0) rotate(0deg) scale(1); border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+  33% { transform: translate(30px, -40px) rotate(15deg) scale(1.05); border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  66% { transform: translate(-20px, 30px) rotate(-10deg) scale(0.95); border-radius: 30% 60% 70% 40% / 50% 60% 30% 60%; }
+  100% { transform: translate(0, 0) rotate(0deg) scale(1); border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+}
+
+/* Vein Network background */
+.vein-network {
+  position: absolute;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(225, 29, 72, 0.05) 0%, transparent 60%),
+    linear-gradient(45deg, transparent 40%, rgba(225, 29, 72, 0.05) 50%, transparent 60%);
+  background-size: 200% 200%;
+  animation: pulseVeins 8s infinite alternate;
+  z-index: 0;
+}
+
+@keyframes pulseVeins {
+  0% { opacity: 0.5; background-position: 0% 0%; }
+  100% { opacity: 1; background-position: 100% 100%; }
+}
+
+.visuals-text {
+  position: absolute;
+  bottom: 10%;
+  left: 10%;
+  z-index: 4;
+  max-width: 80%;
+  transform: translateY(20px);
+  animation: slideUpFade 1s 0.5s forwards;
+  opacity: 0;
+}
+
+.visuals-text h2 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  background: linear-gradient(90deg, #fff, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.visuals-text p {
+  color: #94a3b8;
+  font-size: 1.1rem;
+}
+
+/* RIGHT SIDE: Auth Form */
+.auth-form-section {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+  background-color: var(--bg-color); /* #0F172A */
+  position: relative;
+}
+
+.glass-form {
+  width: 100%;
+  max-width: 440px;
+  padding: 48px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 24px;
+  box-shadow: 0 30px 60px -15px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.form-header h2 {
+  font-size: 2rem;
+  margin-bottom: 8px;
+  font-weight: 700;
+  color: white;
+}
+
+.form-header p {
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.input-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.input-group input {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 16px 20px;
+  border-radius: 12px;
+  color: white;
+  font-size: 1rem;
+  transition: all 0.3s ease;
+  outline: none;
+}
+
+.input-group input:focus, .input-group input:valid {
+  border-color: var(--accent-red);
+  box-shadow: 0 0 15px rgba(225, 29, 72, 0.15);
+  background: rgba(15, 23, 42, 0.8);
+}
+
+.input-group input::placeholder {
+  color: transparent; /* hide placeholder for floating label effect */
+}
+
+/* Floating label effect */
+.floating-label {
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  color: #64748b;
+  pointer-events: none;
+  transition: all 0.25s ease;
+  font-size: 1rem;
+}
+
+.input-group input:focus + .floating-label,
+.input-group input:valid + .floating-label {
+  top: 0;
+  left: 15px;
+  transform: translateY(-50%) scale(0.85);
+  background: var(--bg-color);
+  padding: 0 8px;
+  color: var(--accent-red);
+  border-radius: 4px;
+}
+
+.form-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 10px;
+}
+
+.forgot-password {
+  align-self: flex-end;
+  color: var(--accent-cyan);
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.forgot-password:hover {
+  text-decoration: underline;
+  color: #22d3ee;
+}
+
+.auth-submit-btn {
+  width: 100%;
+}
+
+.form-footer {
+  text-align: center;
+  font-size: 0.95rem;
+  color: #94a3b8;
+}
+
+.toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent-red);
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  font-size: 0.95rem;
+  margin-left: 4px;
+}
+
+.toggle-btn:hover {
+  text-decoration: underline;
+  color: #f43f5e;
+}
+
+/* Transition Animations */
+.slide-up-1 { animation: slideUpFade 0.6s 0.1s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+.slide-up-2 { animation: slideUpFade 0.6s 0.2s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+.slide-up-3 { animation: slideUpFade 0.6s 0.3s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+.slide-up-4 { animation: slideUpFade 0.6s 0.4s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+.slide-up-5 { animation: slideUpFade 0.6s 0.5s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+.slide-up-6 { animation: slideUpFade 0.6s 0.6s forwards cubic-bezier(0.16, 1, 0.3, 1); opacity: 0; transform: translateY(20px); }
+
+@keyframes slideUpFade {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Responsive constraints */
+@media (max-width: 900px) {
+  .auth-container {
+    flex-direction: column;
+  }
+  .auth-visuals {
+    display: none; /* Hide 3D graphics on small screens entirely for a sleek mobile UI */
+  }
+  .auth-form-section {
+    padding: 20px;
+  }
+}
+
+/* Custom Sweet Alert Popup */
+.custom-swal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.custom-swal-modal {
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.5);
+  border-radius: 16px;
+  padding: 40px;
+  text-align: center;
+  width: 90%;
+  max-width: 400px;
+  transform: scale(0.9);
+  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes popIn {
+  to { transform: scale(1); }
+}
+
+.swal-icon-success {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 4px solid rgba(16, 185, 129, 0.2);
+  margin: 0 auto 24px;
+}
+
+.swal-icon-ring {
+  position: absolute;
+  top: -4px; left: -4px; right: -4px; bottom: -4px;
+  border-radius: 50%;
+  border: 4px solid #10b981;
+  border-color: #10b981 transparent #10b981 transparent;
+  animation: spinRing 1.5s linear infinite;
+}
+
+@keyframes spinRing {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.swal-icon-line {
+  position: absolute;
+  height: 4px;
+  background-color: #10b981;
+  border-radius: 2px;
+}
+
+.swal-icon-line.tip {
+  width: 25px;
+  left: 14px;
+  top: 46px;
+  transform: rotate(45deg);
+}
+
+.swal-icon-line.long {
+  width: 47px;
+  right: 8px;
+  top: 38px;
+  transform: rotate(-45deg);
+}
+
+.swal-title {
+  color: white;
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.swal-text {
+  color: #94a3b8;
+  font-size: 1rem;
+}
+
+/* ─── Auth Error Messages ─── */
+.auth-error {
+  background: rgba(225, 29, 72, 0.1);
+  border: 1px solid rgba(225, 29, 72, 0.3);
+  border-radius: 10px;
+  padding: 12px 16px;
+  color: #fb7185;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+/* ─── Loading Spinner ─── */
+.btn-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Forgot Password Button ─── */
+.forgot-password {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+/* ─── Password Reset Modal ─── */
+.reset-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.reset-success {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.success-checkmark {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.15);
+  border: 2px solid #10b981;
+  color: #10b981;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+.reset-success p {
+  color: #94a3b8;
+  font-size: 1rem;
+}
+
+/* ─── Disabled button ─── */
+.auth-submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}

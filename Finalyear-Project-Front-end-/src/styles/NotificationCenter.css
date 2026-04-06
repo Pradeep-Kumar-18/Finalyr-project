@@ -1,0 +1,192 @@
+/* --- NOTIFICATION CENTER --- */
+.notification-center-view {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-top: 60px;
+}
+
+.notif-header {
+  margin-bottom: 24px;
+}
+
+.notif-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notif-header h2 {
+  font-size: 2rem;
+  font-weight: 300;
+  margin-bottom: 8px;
+  background: linear-gradient(90deg, #fff, #94a3b8);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.notif-header p {
+  color: var(--accent-cyan);
+  font-size: 0.9rem;
+  letter-spacing: 1px;
+}
+
+.unread-badge {
+  background: var(--accent-red);
+  color: white;
+  padding: 2px 10px;
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(225, 29, 72, 0.5);
+  animation: pulseBadge 2s infinite alternate;
+}
+
+@keyframes pulseBadge {
+  0% { box-shadow: 0 0 5px rgba(225, 29, 72, 0.3); }
+  100% { box-shadow: 0 0 15px rgba(225, 29, 72, 0.8); }
+}
+
+/* Filter Bar */
+.filter-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.filter-chip {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  padding: 8px 16px;
+  border-radius: 99px;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.filter-chip:hover { border-color: rgba(255, 255, 255, 0.2); color: white; }
+
+.filter-chip.active {
+  background: rgba(6, 182, 212, 0.15);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.mark-read-btn {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #64748b;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.mark-read-btn:hover { color: white; border-color: var(--accent-cyan); }
+
+/* Notification List */
+.notif-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notif-card {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 20px;
+  transition: all 0.3s;
+}
+
+.notif-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateX(5px);
+}
+
+.notif-card.unread {
+  border-left: 3px solid var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.03);
+}
+
+.notif-icon-wrap {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.notif-icon.alert { color: #ef4444; filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0.5)); }
+.notif-icon.success { color: #10b981; filter: drop-shadow(0 0 5px rgba(16, 185, 129, 0.5)); }
+.notif-icon.reminder { color: #f59e0b; filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.5)); }
+.notif-icon.tip { color: var(--accent-cyan); filter: drop-shadow(0 0 5px rgba(6, 182, 212, 0.5)); }
+
+.notif-body { flex: 1; }
+.notif-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.notif-top strong { color: white; font-size: 0.95rem; }
+.notif-time { color: #475569; font-size: 0.75rem; }
+.notif-body p { color: #94a3b8; font-size: 0.9rem; line-height: 1.5; margin: 0; }
+
+.dismiss-btn {
+  background: transparent;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  padding: 4px;
+  transition: color 0.2s;
+  flex-shrink: 0;
+}
+
+.dismiss-btn:hover { color: #ef4444; }
+
+.unread-dot {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan);
+}
+
+/* Empty State */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px;
+  color: #475569;
+  gap: 16px;
+}
+
+.empty-state svg { opacity: 0.3; }
+.empty-state p { font-size: 1rem; }
+
+/* Stagger Animation */
+.slide-up-stagger {
+  opacity: 0;
+  animation: slideUpFade 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: calc(var(--stagger-idx) * 0.1s);
+}
+
+@keyframes slideUpFade {
+  from { opacity: 0; transform: translateY(15px); }
+  to { opacity: 1; transform: translateY(0); }
+}
