@@ -9,6 +9,18 @@ const FormData = require('form-data');
 const fs = require('fs');
 
 const FLASK_API_URL = process.env.FLASK_API_URL || 'http://localhost:5001';
+const { Readable } = require('stream');
+
+/**
+ * Helper to get an image stream from either a local path or a remote URL
+ */
+const getImageStream = async (filePath) => {
+  if (filePath.startsWith('http')) {
+    const response = await axios.get(filePath, { responseType: 'stream' });
+    return response.data;
+  }
+  return fs.createReadStream(filePath);
+};
 
 /**
  * Combined prediction using all 3 models (eye, nail, palm).
@@ -23,22 +35,25 @@ exports.predictCombined = async (files) => {
 
     // Append each image file to the form data
     if (files.eye && files.eye[0]) {
-      formData.append('eye', fs.createReadStream(files.eye[0].path), {
-        filename: files.eye[0].originalname,
+      const eyeStream = await getImageStream(files.eye[0].path);
+      formData.append('eye', eyeStream, {
+        filename: files.eye[0].originalname || 'eye.jpg',
         contentType: files.eye[0].mimetype
       });
     }
 
     if (files.nail && files.nail[0]) {
-      formData.append('nail', fs.createReadStream(files.nail[0].path), {
-        filename: files.nail[0].originalname,
+      const nailStream = await getImageStream(files.nail[0].path);
+      formData.append('nail', nailStream, {
+        filename: files.nail[0].originalname || 'nail.jpg',
         contentType: files.nail[0].mimetype
       });
     }
 
     if (files.palm && files.palm[0]) {
-      formData.append('palm', fs.createReadStream(files.palm[0].path), {
-        filename: files.palm[0].originalname,
+      const palmStream = await getImageStream(files.palm[0].path);
+      formData.append('palm', palmStream, {
+        filename: files.palm[0].originalname || 'palm.jpg',
         contentType: files.palm[0].mimetype
       });
     }
@@ -80,8 +95,8 @@ exports.predictCombined = async (files) => {
  */
 exports.predictSingle = async (imagePath, type) => {
   try {
-    const formData = new FormData();
-    formData.append('image', fs.createReadStream(imagePath));
+    const imageStream = await getImageStream(imagePath);
+    formData.append('image', imageStream);
     formData.append('type', type);
 
     console.log(`Sending single ${type} image to Flask API...`);

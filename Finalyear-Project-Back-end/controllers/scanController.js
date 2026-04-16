@@ -26,10 +26,10 @@ exports.createCombinedScan = async (req, res, next) => {
       });
     }
 
-    // Build image URLs
-    const eyeImageUrl = `/uploads/${req.files.eye[0].filename}`;
-    const nailImageUrl = `/uploads/${req.files.nail[0].filename}`;
-    const palmImageUrl = `/uploads/${req.files.palm[0].filename}`;
+    // Build image URLs (using .path which is the Cloudinary URL when using CloudinaryStorage)
+    const eyeImageUrl = req.files.eye[0].path;
+    const nailImageUrl = req.files.nail[0].path;
+    const palmImageUrl = req.files.palm[0].path;
 
     // Call Flask AI service with all 3 images
     const prediction = await cnnService.predictCombined(req.files);
@@ -68,7 +68,7 @@ exports.createScan = async (req, res, next) => {
       return res.status(400).json({ success: false, error: 'Please upload an image' });
     }
 
-    const imageUrl = `/uploads/${req.file.filename}`;
+    const imageUrl = req.file.path;
     
     // Map frontend type names to model type names
     const typeMap = {
