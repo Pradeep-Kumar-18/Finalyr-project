@@ -1,21 +1,113 @@
 /**
  * CNN Model Bridge
  * This service handles the communication between the Express backend
- * and the Python/CNN model.
+ * and the Python Flask AI inference service.
  */
 
-// Simulated prediction for now
-// In the future, this will use axios to call a Python API or child_process to run a script
-exports.predictHb = async (imagePath) => {
-  console.log(`Analyzing image at: ${imagePath}`);
-  
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
+const axios = require('axios');
+const FormData = require('form-data');
+const fs = require('fs');
 
-  // Return a simulated result
-  return {
-    hb: (10 + Math.random() * 5).toFixed(1),
-    confidence: (95 + Math.random() * 4).toFixed(1)
-  };
+const FLASK_API_URL = process.env.FLASK_API_URL || 'http://localhost:5001';
+
+/**
+ * Combined prediction using all 3 models (eye, nail, palm).
+ * Sends all 3 images to the Flask API and returns combined results.
+ * 
+ * @param {Object} files - Object with eye, nail, palm file objects from multer
+ * @returns {Object} - Prediction result with scores, label, confidence, status
+ */
+exports.predictCombined = async (files) => {
+  try {
+    const formData = new FormData();
+
+    // Append each image file to the form data
+    if (files.eye && files.eye[0]) {
+      formData.append('eye', fs.createReadStream(files.eye[0].path), {
+        filename: files.eye[0].originalname,
+        contentType: files.eye[0].mimetype
+      });
+    }
+
+    if (files.nail && files.nail[0]) {
+      formData.append('nail', fs.createReadStream(files.nail[0].path), {
+        filename: files.nail[0].originalname,
+        contentType: files.nail[0].mimetype
+      });
+    }
+
+    if (files.palm && files.palm[0]) {
+      formData.append('palm', fs.createReadStream(files.palm[0].path), {
+        filename: files.palm[0].originalname,
+        contentType: files.palm[0].mimetype
+      });
+    }
+
+    console.log(`Sending images to Flask API at ${FLASK_API_URL}/predict...`);
+
+    const response = await axios.post(`${FLASK_API_URL}/predict`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      timeout: 60000 // 60 second timeout for model inference
+    });
+
+    console.log('Flask API Response:', response.data);
+
+    return response.data;
+
+  } catch (error) {
+    console.error('CNN Service Error:', error.message);
+
+    if (error.code === 'ECONNREFUSED') {
+      throw new Error('AI Service is not running. Please start the Python Flask server (ai-service/app.py) on port 5001.');
+    }
+
+    if (error.response) {
+      throw new Error(`AI Service Error: ${error.response.data.error || error.response.statusText}`);
+    }
+
+    throw new Error(`Failed to get prediction: ${error.message}`);
+  }
 };
-  
+
+/**
+ * Single image prediction (for individual scans).
+ * 
+ * @param {string} imagePath - Path to the uploaded image
+ * @param {string} type - Scan type ('eye', 'nail', 'palm')
+ * @returns {Object} - Prediction result with score, label, confidence
+ */
+exports.predictSingle = async (imagePath, type) => {
+  try {
+    const formData = new FormData();
+    formData.append('image', fs.createReadStream(imagePath));
+    formData.append('type', type);
+
+    console.log(`Sending single ${type} image to Flask API...`);
+
+    const response = await axios.post(`${FLASK_API_URL}/predict/single`, formData, {
+      headers: {
+        ...formData.getHeaders()
+      },
+      timeout: 60000
+    });
+
+    console.log('Single Prediction Response:', response.data);
+
+    return response.data;
+
+  } catch (error) {
+    console.error('CNN Service Error (single):', error.message);
+
+    if (error.code === 'ECONNREFUSED') {
+      throw new Error('AI Service is not running. Please start the Python Flask server on port 5001.');
+    }
+
+    if (error.response) {
+      throw new Error(`AI Service Error: ${error.response.data.error || error.response.statusText}`);
+    }
+
+    throw new Error(`Failed to get prediction: ${error.message}`);
+  }
+};

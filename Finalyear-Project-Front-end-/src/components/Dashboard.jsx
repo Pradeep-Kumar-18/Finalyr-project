@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Activity, LayoutDashboard, FileText, Settings, LogOut, UploadCloud, Eye, Hand, ActivitySquare, ChevronRight, Microscope, GitCompare, ClipboardList, Bell, TrendingUp, UserCircle, Apple, HelpCircle, Heart } from 'lucide-react';
+import { Activity, LayoutDashboard, FileText, Settings, LogOut, UploadCloud, Eye, Hand, ActivitySquare, ChevronRight, Microscope, GitCompare, ClipboardList, Bell, TrendingUp, UserCircle, Apple, HelpCircle, Heart, CheckCircle, AlertTriangle, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import Diagnostic from './Diagnostic';
@@ -25,53 +25,77 @@ const Dashboard = () => {
 
   const [activeTab, setActiveTab] = useState('scan');
 
-  // Scanning State
-  const [activeScan, setActiveScan] = useState(null);
-  const [scanStatus, setScanStatus] = useState('idle'); // 'scanning', 'results'
+  // Combined Scan State
+  const [eyeFile, setEyeFile] = useState(null);
+  const [nailFile, setNailFile] = useState(null);
+  const [palmFile, setPalmFile] = useState(null);
+  const [eyePreview, setEyePreview] = useState(null);
+  const [nailPreview, setNailPreview] = useState(null);
+  const [palmPreview, setPalmPreview] = useState(null);
+
+  const [scanStatus, setScanStatus] = useState('idle'); // 'idle', 'scanning', 'results'
   const [showXAI, setShowXAI] = useState(false);
   
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
 
   // Dynamic Scan Results
-  const [displayHb, setDisplayHb] = useState(14.2);
-  const [displaySpo2, setDisplaySpo2] = useState(98);
-  const [displayConfidence, setDisplayConfidence] = useState(99.4);
-  const [displayStatus, setDisplayStatus] = useState('Normal');
+  const [scanResult, setScanResult] = useState(null);
 
   // File refs for clearing after upload
   const palmRef = useRef(null);
   const eyeRef = useRef(null);
   const nailRef = useRef(null);
 
-  const handleScan = async (e, type) => {
+  const handleFileSelect = (e, type) => {
     const file = e.target.files[0];
     if (!file) return;
 
-    setActiveScan(type);
+    const previewUrl = URL.createObjectURL(file);
+
+    switch (type) {
+      case 'eye':
+        setEyeFile(file);
+        setEyePreview(previewUrl);
+        break;
+      case 'nail':
+        setNailFile(file);
+        setNailPreview(previewUrl);
+        break;
+      case 'palm':
+        setPalmFile(file);
+        setPalmPreview(previewUrl);
+        break;
+    }
+  };
+
+  const allFilesSelected = eyeFile && nailFile && palmFile;
+
+  const handleCombinedScan = async () => {
+    if (!allFilesSelected) return;
+
     setScanStatus('scanning');
     setShowXAI(false);
 
     const formData = new FormData();
-    formData.append('image', file);
-    formData.append('type', type);
+    formData.append('eye', eyeFile);
+    formData.append('nail', nailFile);
+    formData.append('palm', palmFile);
 
     try {
       const token = localStorage.getItem('token');
       const apiUrl = import.meta.env.VITE_API_URL;
       
-      const response = await axios.post(`${apiUrl}/scans`, formData, {
+      const response = await axios.post(`${apiUrl}/scans/combined`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        timeout: 120000 // 2 min timeout for AI inference
       });
 
       if (response.data.success) {
         const result = response.data.data;
-        setDisplayHb(result.hb);
-        setDisplaySpo2(result.spo2);
-        setDisplayConfidence(result.confidence);
-        setDisplayStatus(result.status);
+        setScanResult(result);
         
         // Brief delay to allow "scanning" animation to show
         setTimeout(() => {
@@ -80,7 +104,7 @@ const Dashboard = () => {
       }
     } catch (err) {
       console.error('Scan Error:', err);
-      const errorMessage = err.response?.data?.error || 'Error processing scan. Please ensure the backend is running and you are logged in.';
+      const errorMessage = err.response?.data?.error || 'Error processing scan. Please ensure the backend and AI service are running.';
       alert(errorMessage);
       setScanStatus('idle');
     }
@@ -88,8 +112,14 @@ const Dashboard = () => {
 
   const closeScan = () => {
     setScanStatus('idle');
-    setActiveScan(null);
+    setScanResult(null);
     setShowXAI(false);
+    setEyeFile(null);
+    setNailFile(null);
+    setPalmFile(null);
+    setEyePreview(null);
+    setNailPreview(null);
+    setPalmPreview(null);
     // Reset file inputs
     if (palmRef.current) palmRef.current.value = '';
     if (eyeRef.current) eyeRef.current.value = '';
@@ -107,6 +137,17 @@ const Dashboard = () => {
     navigate('/login');
   };
 
+  const getScoreColor = (score) => {
+    if (score >= 0.5) return '#10b981';  // green - normal
+    if (score >= 0.3) return '#f59e0b';  // amber - borderline
+    return '#ef4444';  // red - anemia
+  };
+
+  const getScoreLabel = (score) => {
+    if (score >= 0.5) return 'Normal';
+    return 'Anemia';
+  };
+
   const renderTabContent = () => {
     const commonProps = { onBack: () => setActiveTab('scan') };
     switch (activeTab) {
@@ -119,41 +160,103 @@ const Dashboard = () => {
                 <span className="user-name-glow">{userName}</span>
               </div>
               <h1>Hemoglobin Analysis</h1>
-              <p>Non-invasive prediction via multi-modal scanning</p>
+              <p>Non-invasive prediction via multi-modal AI scanning</p>
             </header>
 
-            <section className="hologram-grid">
-              <div className="hologram-module">
-                <div className="rhythmic-pulse"></div>
-                <div className="module-content">
-                  <Hand size={48} className="ruby-icon" />
-                  <h3>Palm Scan</h3>
-                  <p>Upload dermal imaging</p>
-                  <input ref={palmRef} type="file" id="upload-palm" style={{display: 'none'}} onChange={(e) => handleScan(e, 'Palm')} />
-                  <label htmlFor="upload-palm" className="upload-btn"><UploadCloud size={20} /> Select File</label>
-                </div>
+            {/* Combined Upload Section */}
+            <section className="combined-scan-section">
+              <div className="scan-instruction-banner">
+                <Activity size={20} className="ruby-icon" />
+                <span>Upload all 3 images for AI-powered anemia detection</span>
               </div>
 
-              <div className="hologram-module center-module">
-                <div className="rhythmic-pulse active-pulse"></div>
-                <div className="module-content">
-                  <Eye size={56} className="ruby-icon" />
-                  <h3>Conjunctiva Scan</h3>
-                  <p>Awaiting ocular upload</p>
-                  <input ref={eyeRef} type="file" id="upload-eye" style={{display: 'none'}} onChange={(e) => handleScan(e, 'Conjunctiva')} />
-                  <label htmlFor="upload-eye" className="upload-btn primary-btn"><UploadCloud size={20} /> Select File</label>
+              <section className="hologram-grid">
+                {/* Eye Upload */}
+                <div className={`hologram-module ${eyeFile ? 'file-selected' : ''}`}>
+                  <div className="rhythmic-pulse"></div>
+                  <div className="module-content">
+                    {eyePreview ? (
+                      <div className="preview-container">
+                        <img src={eyePreview} alt="Eye preview" className="image-preview" />
+                        <CheckCircle size={24} className="check-icon" />
+                      </div>
+                    ) : (
+                      <Eye size={48} className="ruby-icon" />
+                    )}
+                    <h3>Conjunctiva (Eye)</h3>
+                    <p>{eyeFile ? eyeFile.name : 'Upload eye image'}</p>
+                    <input ref={eyeRef} type="file" id="upload-eye" accept="image/*" style={{display: 'none'}} onChange={(e) => handleFileSelect(e, 'eye')} />
+                    <label htmlFor="upload-eye" className={`upload-btn ${eyeFile ? 'uploaded' : ''}`}>
+                      <UploadCloud size={20} /> {eyeFile ? 'Change' : 'Select File'}
+                    </label>
+                  </div>
                 </div>
-              </div>
 
-              <div className="hologram-module">
-                <div className="rhythmic-pulse"></div>
-                <div className="module-content">
-                  <ActivitySquare size={48} className="ruby-icon" />
-                  <h3>Nail Bed Scan</h3>
-                  <p>Upload capillary imaging</p>
-                  <input ref={nailRef} type="file" id="upload-nail" style={{display: 'none'}} onChange={(e) => handleScan(e, 'Nail Bed')} />
-                  <label htmlFor="upload-nail" className="upload-btn"><UploadCloud size={20} /> Select File</label>
+                {/* Palm Upload */}
+                <div className={`hologram-module center-module ${palmFile ? 'file-selected' : ''}`}>
+                  <div className="rhythmic-pulse active-pulse"></div>
+                  <div className="module-content">
+                    {palmPreview ? (
+                      <div className="preview-container">
+                        <img src={palmPreview} alt="Palm preview" className="image-preview" />
+                        <CheckCircle size={24} className="check-icon" />
+                      </div>
+                    ) : (
+                      <Hand size={56} className="ruby-icon" />
+                    )}
+                    <h3>Palm Scan</h3>
+                    <p>{palmFile ? palmFile.name : 'Upload palm image'}</p>
+                    <input ref={palmRef} type="file" id="upload-palm" accept="image/*" style={{display: 'none'}} onChange={(e) => handleFileSelect(e, 'palm')} />
+                    <label htmlFor="upload-palm" className={`upload-btn primary-btn ${palmFile ? 'uploaded' : ''}`}>
+                      <UploadCloud size={20} /> {palmFile ? 'Change' : 'Select File'}
+                    </label>
+                  </div>
                 </div>
+
+                {/* Nail Upload */}
+                <div className={`hologram-module ${nailFile ? 'file-selected' : ''}`}>
+                  <div className="rhythmic-pulse"></div>
+                  <div className="module-content">
+                    {nailPreview ? (
+                      <div className="preview-container">
+                        <img src={nailPreview} alt="Nail preview" className="image-preview" />
+                        <CheckCircle size={24} className="check-icon" />
+                      </div>
+                    ) : (
+                      <ActivitySquare size={48} className="ruby-icon" />
+                    )}
+                    <h3>Nail Bed Scan</h3>
+                    <p>{nailFile ? nailFile.name : 'Upload nail image'}</p>
+                    <input ref={nailRef} type="file" id="upload-nail" accept="image/*" style={{display: 'none'}} onChange={(e) => handleFileSelect(e, 'nail')} />
+                    <label htmlFor="upload-nail" className={`upload-btn ${nailFile ? 'uploaded' : ''}`}>
+                      <UploadCloud size={20} /> {nailFile ? 'Change' : 'Select File'}
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              {/* Analyze Button */}
+              <div className="analyze-button-container">
+                <button 
+                  className={`analyze-btn ${allFilesSelected ? 'ready' : 'disabled'}`}
+                  onClick={handleCombinedScan}
+                  disabled={!allFilesSelected || scanStatus === 'scanning'}
+                >
+                  {scanStatus === 'scanning' ? (
+                    <>
+                      <Loader2 size={22} className="spinning-loader" />
+                      Analyzing with AI Models...
+                    </>
+                  ) : (
+                    <>
+                      <Activity size={22} />
+                      {allFilesSelected ? 'Run Combined AI Analysis' : `Upload ${3 - [eyeFile, nailFile, palmFile].filter(Boolean).length} more image(s)`}
+                    </>
+                  )}
+                </button>
+                {allFilesSelected && scanStatus === 'idle' && (
+                  <p className="analyze-hint">3 models will analyze your images simultaneously</p>
+                )}
               </div>
             </section>
 
@@ -245,9 +348,7 @@ const Dashboard = () => {
               {scanStatus === 'scanning' ? (
                 <div className="neural-xray-view">
                   <div className="source-node">
-                    {activeScan === 'Palm' && <Hand size={64} className="ruby-icon"/>}
-                    {activeScan === 'Conjunctiva' && <Eye size={64} className="ruby-icon"/>}
-                    {activeScan === 'Nail Bed' && <ActivitySquare size={64} className="ruby-icon"/>}
+                    <Activity size={64} className="ruby-icon"/>
                     <div className="laser-scanner horizontal-sweep"></div>
                   </div>
                   <div className="synapse-network">
@@ -257,20 +358,18 @@ const Dashboard = () => {
                     <div className="synapse-line to-bottom"></div>
                   </div>
                   <div className="feature-maps">
-                    <div className="f-map edge-map">Edges</div>
-                    <div className="f-map texture-map">Textures</div>
-                    <div className="f-map thermal-map">Thermal</div>
-                    <div className="f-map vascular-map">Vascular</div>
+                    <div className="f-map edge-map">Eye Model</div>
+                    <div className="f-map texture-map">Palm Model</div>
+                    <div className="f-map thermal-map">Nail Model</div>
+                    <div className="f-map vascular-map">Averaging</div>
                   </div>
-                  <div className="scanning-text pulse-text">Extracting CNN feature maps for {activeScan}...</div>
+                  <div className="scanning-text pulse-text">Running 3 CNN models in parallel...</div>
                 </div>
               ) : showXAI ? (
                 <div className="xai-gradcam-view slide-up-fade">
                   <div className="binary-cascade-bg"></div>
                   <div className="xai-image-container">
-                    {activeScan === 'Palm' && <Hand size={140} className="base-image"/>}
-                    {activeScan === 'Conjunctiva' && <Eye size={140} className="base-image"/>}
-                    {activeScan === 'Nail Bed' && <ActivitySquare size={140} className="base-image"/>}
+                    <Activity size={140} className="base-image"/>
                     <div className="heatmap-overlay pulse-ruby-gradient"></div>
                     <div className="xai-radar-sweep"></div>
                   </div>
@@ -280,7 +379,7 @@ const Dashboard = () => {
                           <circle cx="50" cy="50" r="45" className="bg-ring"></circle>
                           <circle cx="50" cy="50" r="45" className="progress-ring"></circle>
                        </svg>
-                       <span className="confidence-text">{displayConfidence}%</span>
+                       <span className="confidence-text">{scanResult?.confidence}%</span>
                     </div>
                     <p className="confidence-label">CNN Confidence Score</p>
                   </div>
@@ -295,7 +394,7 @@ const Dashboard = () => {
             </div>
 
             {/* Slide-in Results Panels (Only show when results are ready) */}
-            {scanStatus === 'results' && (
+            {scanStatus === 'results' && scanResult && (
               <div className="results-panels-container">
                 
                 {/* AI Focus Trigger Button */}
@@ -305,41 +404,90 @@ const Dashboard = () => {
                   </button>
                 </div>
                 
-                {/* Left Panel: Vital Metrics */}
+                {/* Left Panel: Combined Result */}
                 <div className="glass-panel result-panel-left enter-left">
-                  <h4 className="panel-title">Non-Invasive Prediction</h4>
-                  <div className="vital-metric">
-                    <span className="metric-label">Hemoglobin Concentration</span>
-                    <div className="metric-value-container">
-                      <span className="metric-value count-up">{displayHb}</span>
-                      <span className="metric-unit">g/dL</span>
-                    </div>
+                  <h4 className="panel-title">AI Prediction Result</h4>
+                  
+                  <div className={`prediction-label-badge ${scanResult.label === 'Normal' ? 'normal-badge' : 'anemia-badge'}`}>
+                    {scanResult.label === 'Normal' ? <CheckCircle size={24} /> : <AlertTriangle size={24} />}
+                    <span className="prediction-label-text">{scanResult.label}</span>
                   </div>
+
                   <div className="vital-metric">
-                    <span className="metric-label">Oxygen Saturation (SpO2)</span>
+                    <span className="metric-label">Combined Score</span>
                     <div className="metric-value-container">
-                      <span className="metric-value count-up-delay">{displaySpo2}</span>
+                      <span className="metric-value count-up" style={{color: getScoreColor(scanResult.finalScore)}}>
+                        {(scanResult.finalScore * 100).toFixed(1)}
+                      </span>
                       <span className="metric-unit">%</span>
                     </div>
                   </div>
-                  <div className={`diagnostic-badge ${displayStatus.toLowerCase()}-status`}>
+
+                  <div className="vital-metric">
+                    <span className="metric-label">Confidence</span>
+                    <div className="metric-value-container">
+                      <span className="metric-value count-up-delay">{scanResult.confidence}</span>
+                      <span className="metric-unit">%</span>
+                    </div>
+                  </div>
+
+                  <div className={`diagnostic-badge ${scanResult.status.toLowerCase()}-status`}>
                     <div className="status-dot"></div>
-                    {displayStatus} Range
+                    {scanResult.status} Range
                   </div>
                 </div>
 
-                {/* Right Panel: Topographical Analysis */}
+                {/* Right Panel: Individual Model Breakdown */}
                 <div className="glass-panel result-panel-right enter-right">
-                  <h4 className="panel-title">Topographical Analysis</h4>
-                  <div className="spider-chart-placeholder">
-                    <div className="radar-grid"></div>
-                    <div className="radar-blob"></div>
+                  <h4 className="panel-title">Individual Model Scores</h4>
+                  
+                  <div className="model-score-item">
+                    <div className="model-score-header">
+                      <Eye size={18} className="ruby-icon small" />
+                      <span>Eye (Conjunctiva)</span>
+                    </div>
+                    <div className="model-score-bar">
+                      <div className="score-fill" style={{width: `${scanResult.eyeScore * 100}%`, background: getScoreColor(scanResult.eyeScore)}}></div>
+                    </div>
+                    <span className="model-score-value" style={{color: getScoreColor(scanResult.eyeScore)}}>
+                      {(scanResult.eyeScore * 100).toFixed(1)}% — {getScoreLabel(scanResult.eyeScore)}
+                    </span>
                   </div>
-                  <ul className="analysis-details">
-                    <li><span>Corpuscle Density:</span> <span className="highlight-cyan">Optimal</span></li>
-                    <li><span>Vascular Flow:</span> <span className="highlight-cyan">Steady</span></li>
-                    <li><span>Confidence Score:</span> <span className="highlight-cyan">99.4%</span></li>
-                  </ul>
+
+                  <div className="model-score-item">
+                    <div className="model-score-header">
+                      <ActivitySquare size={18} className="ruby-icon small" />
+                      <span>Nail Bed</span>
+                    </div>
+                    <div className="model-score-bar">
+                      <div className="score-fill" style={{width: `${scanResult.nailScore * 100}%`, background: getScoreColor(scanResult.nailScore)}}></div>
+                    </div>
+                    <span className="model-score-value" style={{color: getScoreColor(scanResult.nailScore)}}>
+                      {(scanResult.nailScore * 100).toFixed(1)}% — {getScoreLabel(scanResult.nailScore)}
+                    </span>
+                  </div>
+
+                  <div className="model-score-item">
+                    <div className="model-score-header">
+                      <Hand size={18} className="ruby-icon small" />
+                      <span>Palm</span>
+                    </div>
+                    <div className="model-score-bar">
+                      <div className="score-fill" style={{width: `${scanResult.palmScore * 100}%`, background: getScoreColor(scanResult.palmScore)}}></div>
+                    </div>
+                    <span className="model-score-value" style={{color: getScoreColor(scanResult.palmScore)}}>
+                      {(scanResult.palmScore * 100).toFixed(1)}% — {getScoreLabel(scanResult.palmScore)}
+                    </span>
+                  </div>
+
+                  <div className="ai-insight-box" style={{marginTop: '16px'}}>
+                    <Activity size={14} />
+                    <p>
+                      {scanResult.label === 'Normal' 
+                        ? 'AI models indicate healthy hemoglobin levels across all scanned regions.'
+                        : 'AI models detect potential anemia indicators. Please consult a healthcare professional for confirmation.'}
+                    </p>
+                  </div>
                 </div>
                 
               </div>

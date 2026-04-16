@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Eye, Hand, ActivitySquare, ChevronRight, Activity, Loader2 } from 'lucide-react';
+import { Eye, Hand, ActivitySquare, ChevronRight, Activity, Loader2, CheckCircle, AlertTriangle } from 'lucide-react';
 import BackButton from './BackButton';
 import '../styles/Diagnostic.css';
 
@@ -73,17 +73,24 @@ const Diagnostic = ({ onBack }) => {
               </div>
               <div className="card-main">
                 <div className="log-type">
-                  {log.type.includes('Palm') && <Hand size={20} className="ruby-icon small"/>}
+                  {log.type === 'Combined' && <Activity size={20} className="ruby-icon small"/>}
+                  {log.type.includes('Palm') && log.type !== 'Combined' && <Hand size={20} className="ruby-icon small"/>}
                   {log.type.includes('Conjunctiva') && <Eye size={20} className="ruby-icon small"/>}
-                  {log.type.includes('Nail') && <ActivitySquare size={20} className="ruby-icon small"/>}
-                  <h4>{log.type}</h4>
+                  {log.type.includes('Nail') && log.type !== 'Combined' && <ActivitySquare size={20} className="ruby-icon small"/>}
+                  <h4>{log.type === 'Combined' ? 'Combined AI Analysis' : log.type}</h4>
                 </div>
                 <div className="log-metric">
-                  <span className="hb-value">{log.hb} <small>g/dL</small></span>
+                  {log.label ? (
+                    <span className="hb-value" style={{color: log.label === 'Normal' ? '#10b981' : '#ef4444'}}>
+                      {log.label} <small>({(log.finalScore * 100).toFixed(1)}%)</small>
+                    </span>
+                  ) : (
+                    <span className="hb-value">{log.hb} <small>g/dL</small></span>
+                  )}
                 </div>
               </div>
               <div className="card-bottom">
-                <span className="trend-indicator">{log.trend.startsWith('+') ? 'Increased' : 'Decreased'} {log.trend}</span>
+                <span className="trend-indicator">Confidence: {log.confidence}%</span>
                 <ChevronRight size={18} className="chevron-icon"/>
               </div>
             </div>
@@ -97,33 +104,41 @@ const Diagnostic = ({ onBack }) => {
         {selectedLog && (
           <div className="drawer-content">
             <h3>Analysis Details</h3>
-            <p className="drawer-subtitle">{selectedLog.date} - {selectedLog.type}</p>
+            <p className="drawer-subtitle">{selectedLog.date} - {selectedLog.type === 'Combined' ? 'Combined AI Analysis' : selectedLog.type}</p>
             
-            <div className="drawer-metric-highlight">
-              <h1>{selectedLog.hb}</h1>
-              <span>g/dL</span>
-            </div>
-            
-            {/* Volumetric Trend UI */}
-            <div className="volumetric-trend-chart">
-               <div className="trend-label">30-Day Trend Comparison</div>
-               <div className="chart-3d-bars">
-                 <div className="bar-3d past-avg">
-                   <div className="bar-face front">Avg: 14.1</div>
-                   <div className="bar-face top"></div>
-                   <div className="bar-face right"></div>
-                 </div>
-                 <div className="bar-3d current-scan" style={{'--h': `${(selectedLog.hb/16)*100}%`}}>
-                   <div className="bar-face front">Cur: {selectedLog.hb}</div>
-                   <div className="bar-face top"></div>
-                   <div className="bar-face right"></div>
-                 </div>
-               </div>
-            </div>
+            {selectedLog.label ? (
+              <>
+                <div className="drawer-metric-highlight">
+                  <h1 style={{color: selectedLog.label === 'Normal' ? '#10b981' : '#ef4444'}}>{selectedLog.label}</h1>
+                  <span>{(selectedLog.finalScore * 100).toFixed(1)}%</span>
+                </div>
+
+                {selectedLog.eyeScore != null && (
+                  <div style={{marginBottom: '20px'}}>
+                    <p style={{color: '#94a3b8', fontSize: '0.85rem', marginBottom: '8px'}}>Individual Model Scores:</p>
+                    <p style={{color: '#94a3b8', fontSize: '0.85rem'}}>👁 Eye: {(selectedLog.eyeScore * 100).toFixed(1)}%</p>
+                    <p style={{color: '#94a3b8', fontSize: '0.85rem'}}>💅 Nail: {(selectedLog.nailScore * 100).toFixed(1)}%</p>
+                    <p style={{color: '#94a3b8', fontSize: '0.85rem'}}>🤚 Palm: {(selectedLog.palmScore * 100).toFixed(1)}%</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <div className="drawer-metric-highlight">
+                <h1>{selectedLog.hb}</h1>
+                <span>g/dL</span>
+              </div>
+            )}
             
             <div className="ai-insight-box">
               <Activity size={18} /> 
-              <p>AI Engine detects {selectedLog.status.toLowerCase()} corpuscle density variations across the scanned region. No immediate clinical action required.</p>
+              <p>
+                {selectedLog.label 
+                  ? (selectedLog.label === 'Normal'
+                    ? 'AI models indicate healthy hemoglobin levels. No immediate clinical action required.'
+                    : 'AI models detect potential anemia indicators. Please consult a healthcare professional for confirmation.')
+                  : `AI Engine detects ${selectedLog.status.toLowerCase()} corpuscle density variations across the scanned region.`
+                }
+              </p>
             </div>
           </div>
         )}

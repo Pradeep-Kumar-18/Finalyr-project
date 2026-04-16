@@ -22,7 +22,13 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+
+// Enable CORS
+const corsOptions = {
+  origin: process.env.FRONTEND_URL || '*',
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
@@ -36,14 +42,7 @@ app.use('/api/reports', reports);
 
 app.use(errorHandler);
 
-const path = require('path');
-
-// Set static folder
-const fs = require('fs');
-if (!fs.existsSync(path.join(__dirname, 'uploads'))) {
-  fs.mkdirSync(path.join(__dirname, 'uploads'));
-}
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Static folder is removed in favor of Cloudinary storage
 
 // Routes placeholder
 app.get('/', (req, res) => {
