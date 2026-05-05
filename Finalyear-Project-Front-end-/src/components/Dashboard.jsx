@@ -83,9 +83,11 @@ const Dashboard = () => {
 
     try {
       const token = localStorage.getItem('token');
-      const apiUrl = import.meta.env.VITE_API_URL;
+      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
       
-      const response = await axios.post(`${apiUrl}/scans/combined`, formData, {
+      console.log(`Calling API: ${baseUrl}/scans/combined`);
+      
+      const response = await axios.post(`${baseUrl}/scans/combined`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Authorization': `Bearer ${token}`
