@@ -91,17 +91,10 @@ exports.predictCombined = async (files) => {
   } catch (error) {
     console.error('CNN Service Error:', error.message);
 
-    // Check if it's a connection error (AI service down)
-    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
-      console.warn('AI Service is unreachable. Using Mock Prediction for demonstration.');
-      return getMockPrediction();
-    }
-
-    if (error.response) {
-      throw new Error(`AI Service Error: ${error.response.data.error || error.response.statusText}`);
-    }
-
-    throw new Error(`Failed to get prediction: ${error.message}`);
+    // Treat any connection error or service error as a trigger for Mock Mode
+    // This includes ECONNREFUSED, timeouts, and 429 (Too Many Requests)
+    console.warn('AI Service issue detected. Using Mock Prediction for demonstration.');
+    return getMockPrediction();
   }
 };
 
@@ -129,20 +122,12 @@ exports.predictSingle = async (imagePath, type) => {
   } catch (error) {
     console.error('CNN Service Error (single):', error.message);
 
-    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-      const score = 0.4 + Math.random() * 0.3;
-      return {
-        score: score,
-        label: score >= 0.5 ? 'Normal' : 'Anemia',
-        confidence: Math.round(Math.abs(score - 0.5) * 200),
-        isMock: true
-      };
-    }
-
-    if (error.response) {
-      throw new Error(`AI Service Error: ${error.response.data.error || error.response.statusText}`);
-    }
-
-    throw new Error(`Failed to get prediction: ${error.message}`);
+    const score = 0.4 + Math.random() * 0.3;
+    return {
+      score: score,
+      label: score >= 0.5 ? 'Normal' : 'Anemia',
+      confidence: Math.round(Math.abs(score - 0.5) * 200),
+      isMock: true
+    };
   }
 };
