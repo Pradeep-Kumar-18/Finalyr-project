@@ -50,6 +50,19 @@ const Dashboard = () => {
     const file = e.target.files[0];
     if (!file) return;
 
+    // Client-side validation: Max 5MB, must be an image
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File too large. Maximum size is 5MB.');
+      e.target.value = '';
+      return;
+    }
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please upload an image file (PNG, JPG, etc).');
+      e.target.value = '';
+      return;
+    }
+
     const previewUrl = URL.createObjectURL(file);
 
     switch (type) {
@@ -68,7 +81,7 @@ const Dashboard = () => {
     }
   };
 
-  const allFilesSelected = eyeFile && nailFile && palmFile;
+  const allFilesSelected = eyeFile && nailFile && palmFile && scanStatus !== 'scanning';
 
   const handleCombinedScan = async () => {
     if (!allFilesSelected) return;
