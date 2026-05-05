@@ -1,0 +1,6 @@
+# Gunicorn config for Render Free Tier
+# 1 worker = models loaded ONCE (prevents memory crash)
+# 2 threads = can handle 2 concurrent HTTP connections
+# 120s timeout = enough for 3 sequential model predictions
+
+web: gunicorn app:app --workers 1 --threads 2 --timeout 120 --bind 0.0.0.0:$PORT
