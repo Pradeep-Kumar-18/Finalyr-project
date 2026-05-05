@@ -26,10 +26,11 @@ exports.createCombinedScan = async (req, res, next) => {
       });
     }
 
-    // Build image URLs (using .path which is the Cloudinary URL when using CloudinaryStorage)
-    const eyeImageUrl = req.files.eye[0].path;
-    const nailImageUrl = req.files.nail[0].path;
-    const palmImageUrl = req.files.palm[0].path;
+    // Build image URLs using local server path
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const eyeImageUrl = `${baseUrl}/uploads/${req.files.eye[0].filename}`;
+    const nailImageUrl = `${baseUrl}/uploads/${req.files.nail[0].filename}`;
+    const palmImageUrl = `${baseUrl}/uploads/${req.files.palm[0].filename}`;
 
     // Call Flask AI service with all 3 images
     const prediction = await cnnService.predictCombined(req.files);
@@ -53,7 +54,7 @@ exports.createCombinedScan = async (req, res, next) => {
     res.status(201).json({ success: true, data: scan });
   } catch (err) {
     console.error('Combined Scan Error:', err);
-    res.status(400).json({ success: false, error: err.message });
+    res.status(500).json({ success: false, error: err.message });
   }
 };
 
