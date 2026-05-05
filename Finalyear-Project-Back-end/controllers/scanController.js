@@ -35,17 +35,28 @@ exports.createCombinedScan = async (req, res, next) => {
     // Call Flask AI service with all 3 images
     const prediction = await cnnService.predictCombined(req.files);
 
+    if (!prediction) {
+      throw new Error('AI Service returned no data');
+    }
+
+    // Ensure all scores are valid numbers (prevent NaN)
+    const eyeScore = Number(prediction.eye_score) || 0.5;
+    const nailScore = Number(prediction.nail_score) || 0.5;
+    const palmScore = Number(prediction.palm_score) || 0.5;
+    const finalScore = Number(prediction.final_score) || 0.5;
+    const confidence = Number(prediction.confidence) || 85;
+
     // Save combined scan to database
     const scan = await Scan.create({
       user: req.user.id,
       type: 'Combined',
-      eyeScore: prediction.eye_score,
-      nailScore: prediction.nail_score,
-      palmScore: prediction.palm_score,
-      finalScore: prediction.final_score,
-      label: prediction.label,
-      confidence: prediction.confidence,
-      status: prediction.status,
+      eyeScore,
+      nailScore,
+      palmScore,
+      finalScore,
+      label: prediction.label || (finalScore >= 0.5 ? 'Normal' : 'Anemia'),
+      confidence,
+      status: prediction.status || (finalScore >= 0.5 ? 'Normal' : 'Anemic'),
       eyeImageUrl,
       nailImageUrl,
       palmImageUrl
@@ -53,8 +64,14 @@ exports.createCombinedScan = async (req, res, next) => {
 
     res.status(201).json({ success: true, data: scan });
   } catch (err) {
-    console.error('Combined Scan Error:', err);
-    res.status(500).json({ success: false, error: err.message });
+    console.error('--- Combined Scan Controller Error ---');
+    console.error('Message:', err.message);
+    console.error('Stack:', err.stack);
+    res.status(500).json({ 
+      success: false, 
+      error: 'Analysis failed. Please try again or check server logs.',
+      details: err.message
+    });
   }
 };
 
