@@ -1,15 +1,19 @@
 """
-HemoVision AI - Flask Inference API (Production Optimized)
-==========================================================
-- Loads MobileNetV2 models ONCE at startup (global scope)
+HemoVision AI - Flask Inference API (Production Optimized v2)
+=============================================================
+FIXES in v2:
+- Added per-client request throttling (prevents 429 from burst requests)
+- Added request queue with semaphore (max 1 concurrent inference)
+- Added detailed request timing logs
+- Added memory-efficient image processing with explicit cleanup
+- Optimized for Render free tier (1 worker, 2 threads)
 - Thread-safe inference with threading.Lock
 - Single combined endpoint to avoid multiple requests
-- Optimized for Render free tier (1 worker, 2 threads)
-- Memory-efficient with garbage collection after each prediction
 """
 
 import os
 import gc
+import time
 import threading
 import numpy as np
 from flask import Flask, request, jsonify
@@ -19,6 +23,7 @@ from tensorflow.keras.models import load_model
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input
 from PIL import Image
 import traceback
+from collections import defaultdict
 
 # ========================
 # Memory Optimization for Render Free Tier
@@ -38,6 +43,36 @@ IMG_SIZE = (224, 224)
 
 # Thread lock to prevent concurrent model access (race conditions)
 inference_lock = threading.Lock()
+
+# ========================
+# Request Throttling (Per-Client Rate Limiting)
+# ========================
+class RequestThrottler:
+    """Limits requests per client IP to prevent 429 cascading."""
+    def __init__(self, max_per_minute=3):
+        self.max_per_minute = max_per_minute
+        self.requests = defaultdict(list)
+        self._lock = threading.Lock()
+    
+    def is_allowed(self, client_ip):
+        with self._lock:
+            now = time.time()
+            # Clean old entries
+            self.requests[client_ip] = [
+                t for t in self.requests[client_ip] if now - t < 60
+            ]
+            if len(self.requests[client_ip]) >= self.max_per_minute:
+                return False
+            self.requests[client_ip].append(now)
+            return True
+
+throttler = RequestThrottler(max_per_minute=5)
+
+# ========================
+# Request Queue (Semaphore-based)
+# ========================
+# Only allow 1 inference at a time (prevents OOM on free tier)
+inference_semaphore = threading.Semaphore(1)
 
 # ========================
 # Load Models ONCE at Startup (Global Scope)
@@ -81,6 +116,7 @@ def preprocess_image(img_file):
     img = Image.open(img_file).convert("RGB")
     img = img.resize(IMG_SIZE)
     img_array = np.array(img, dtype=np.float32)
+    del img  # Free PIL image immediately
     img_array = preprocess_input(img_array)
     img_array = np.expand_dims(img_array, axis=0)
     return img_array
@@ -105,7 +141,8 @@ def health_check():
             "eye": eye_model is not None,
             "nail": nail_model is not None,
             "palm": palm_model is not None
-        }
+        },
+        "uptime": time.time()
     })
 
 
@@ -120,6 +157,20 @@ def predict_combined():
     Processes them SEQUENTIALLY inside the lock to prevent race conditions.
     Returns all scores in one response.
     """
+    start_time = time.time()
+    client_ip = request.remote_addr or "unknown"
+
+    # Rate limit check
+    if not throttler.is_allowed(client_ip):
+        print(f"[THROTTLE] Rate limit exceeded for {client_ip}")
+        return jsonify({"error": "Too many requests. Please wait before trying again."}), 429
+
+    # Try to acquire semaphore (non-blocking with timeout)
+    acquired = inference_semaphore.acquire(timeout=60)
+    if not acquired:
+        print(f"[QUEUE] Request from {client_ip} timed out waiting for semaphore")
+        return jsonify({"error": "Server busy. Please try again in a moment."}), 503
+
     try:
         # Validate images
         missing = []
@@ -137,18 +188,22 @@ def predict_combined():
         nail_file = request.files["nail"]
         palm_file = request.files["palm"]
 
-        # Acquire lock: only ONE prediction runs at a time (thread-safe)
+        # Acquire inference lock: only ONE prediction runs at a time (thread-safe)
         with inference_lock:
-            print("[AI] Processing combined prediction (locked)...")
+            print(f"[AI] Processing combined prediction for {client_ip} (locked)...")
 
+            # Sequential: Eye → Nail → Palm (with timing)
+            t1 = time.time()
             eye_score = safe_predict(eye_model, eye_file)
-            print(f"  Eye score: {eye_score:.4f}")
+            print(f"  Eye score: {eye_score:.4f} ({time.time()-t1:.2f}s)")
 
+            t2 = time.time()
             nail_score = safe_predict(nail_model, nail_file)
-            print(f"  Nail score: {nail_score:.4f}")
+            print(f"  Nail score: {nail_score:.4f} ({time.time()-t2:.2f}s)")
 
+            t3 = time.time()
             palm_score = safe_predict(palm_model, palm_file)
-            print(f"  Palm score: {palm_score:.4f}")
+            print(f"  Palm score: {palm_score:.4f} ({time.time()-t3:.2f}s)")
 
         # Aggregate (outside lock to free it faster)
         final_score = (eye_score + nail_score + palm_score) / 3.0
@@ -172,7 +227,8 @@ def predict_combined():
             "status": status
         }
 
-        print(f"[AI] Result: {label} ({confidence}% confidence)")
+        total_time = time.time() - start_time
+        print(f"[AI] Result: {label} ({confidence}% confidence) — Total: {total_time:.2f}s")
 
         # Free memory
         gc.collect()
@@ -183,6 +239,8 @@ def predict_combined():
         traceback.print_exc()
         gc.collect()
         return jsonify({"error": str(e)}), 500
+    finally:
+        inference_semaphore.release()
 
 
 # ========================
@@ -190,6 +248,15 @@ def predict_combined():
 # ========================
 @app.route("/predict/single", methods=["POST"])
 def predict_single_endpoint():
+    client_ip = request.remote_addr or "unknown"
+
+    if not throttler.is_allowed(client_ip):
+        return jsonify({"error": "Too many requests"}), 429
+
+    acquired = inference_semaphore.acquire(timeout=30)
+    if not acquired:
+        return jsonify({"error": "Server busy"}), 503
+
     try:
         if "image" not in request.files:
             return jsonify({"error": "Missing image file"}), 400
@@ -219,6 +286,8 @@ def predict_single_endpoint():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+    finally:
+        inference_semaphore.release()
 
 
 # ========================

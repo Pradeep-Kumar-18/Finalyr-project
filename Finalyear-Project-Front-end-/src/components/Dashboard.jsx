@@ -34,7 +34,12 @@ const Dashboard = () => {
   const [palmPreview, setPalmPreview] = useState(null);
 
   const [scanStatus, setScanStatus] = useState('idle'); // 'idle', 'scanning', 'results'
+  const [scanProgress, setScanProgress] = useState(''); // Progress message during scan
+  const [scanError, setScanError] = useState(null); // Error message to display
   const [showXAI, setShowXAI] = useState(false);
+
+  // Submission lock: prevents double-clicks and rapid resubmissions
+  const isSubmitting = useRef(false);
   
   const [showLogoutAlert, setShowLogoutAlert] = useState(false);
 
@@ -84,50 +89,88 @@ const Dashboard = () => {
   const allFilesSelected = eyeFile && nailFile && palmFile && scanStatus !== 'scanning';
 
   const handleCombinedScan = async () => {
-    if (!allFilesSelected) return;
+    if (!allFilesSelected || isSubmitting.current) return;
 
+    // Lock submission
+    isSubmitting.current = true;
     setScanStatus('scanning');
+    setScanError(null);
     setShowXAI(false);
+    setScanProgress('Uploading images to server...');
 
-    const formData = new FormData();
-    formData.append('eye', eyeFile);
-    formData.append('nail', nailFile);
-    formData.append('palm', palmFile);
+    const token = localStorage.getItem('token');
+    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    const MAX_RETRIES = 2;
 
-    try {
-      const token = localStorage.getItem('token');
-      const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-      
-      console.log(`Calling API: ${baseUrl}/scans/combined`);
-      
-      const response = await axios.post(`${baseUrl}/scans/combined`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-          'Authorization': `Bearer ${token}`
-        },
-        timeout: 120000 // 2 min timeout for AI inference
-      });
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const formData = new FormData();
+        formData.append('eye', eyeFile);
+        formData.append('nail', nailFile);
+        formData.append('palm', palmFile);
 
-      if (response.data.success) {
-        const result = response.data.data;
-        setScanResult(result);
-        
-        // Brief delay to allow "scanning" animation to show
-        setTimeout(() => {
-          setScanStatus('results');
-        }, 1500);
+        if (attempt > 1) {
+          setScanProgress(`Retrying analysis (attempt ${attempt}/${MAX_RETRIES})...`);
+          console.warn(`[HemoAI] Retry attempt ${attempt}/${MAX_RETRIES}`);
+        } else {
+          setScanProgress('Running AI models: Eye → Palm → Nail...');
+        }
+
+        console.log(`[HemoAI] Calling API: ${baseUrl}/scans/combined (attempt ${attempt})`);
+
+        const response = await axios.post(`${baseUrl}/scans/combined`, formData, {
+          headers: {
+            'Content-Type': 'multipart/form-data',
+            'Authorization': `Bearer ${token}`
+          },
+          timeout: 180000 // 3 min timeout
+        });
+
+        if (response.data.success) {
+          const result = response.data.data;
+          setScanResult(result);
+          setScanProgress('Analysis complete!');
+
+          setTimeout(() => {
+            setScanStatus('results');
+            setScanProgress('');
+          }, 1500);
+
+          isSubmitting.current = false;
+          return; // Success — exit retry loop
+        }
+      } catch (err) {
+        console.error(`[HemoAI] Scan attempt ${attempt} failed:`, err);
+        const status = err.response?.status;
+        const isRetryable = [429, 502, 503, 504].includes(status) || err.code === 'ECONNABORTED';
+
+        if (isRetryable && attempt < MAX_RETRIES) {
+          const delay = 3000 * attempt; // 3s, 6s
+          setScanProgress(`Server busy (${status || 'timeout'}). Retrying in ${delay/1000}s...`);
+          await new Promise(r => setTimeout(r, delay));
+          continue;
+        }
+
+        // Final failure
+        const errorMessage = err.response?.data?.error
+          || (err.code === 'ECONNABORTED' ? 'Request timed out. The AI service may be starting up — please try again in 30 seconds.'
+          : 'Error processing scan. Please ensure the backend and AI service are running.');
+        setScanError(errorMessage);
+        setScanStatus('idle');
+        setScanProgress('');
+        isSubmitting.current = false;
+        return;
       }
-    } catch (err) {
-      console.error('Scan Error:', err);
-      const errorMessage = err.response?.data?.error || 'Error processing scan. Please ensure the backend and AI service are running.';
-      alert(errorMessage);
-      setScanStatus('idle');
     }
+
+    isSubmitting.current = false;
   };
 
   const closeScan = () => {
     setScanStatus('idle');
     setScanResult(null);
+    setScanError(null);
+    setScanProgress('');
     setShowXAI(false);
     setEyeFile(null);
     setNailFile(null);
@@ -135,6 +178,7 @@ const Dashboard = () => {
     setEyePreview(null);
     setNailPreview(null);
     setPalmPreview(null);
+    isSubmitting.current = false;
     // Reset file inputs
     if (palmRef.current) palmRef.current.value = '';
     if (eyeRef.current) eyeRef.current.value = '';
@@ -270,7 +314,13 @@ const Dashboard = () => {
                   )}
                 </button>
                 {allFilesSelected && scanStatus === 'idle' && (
-                  <p className="analyze-hint">3 models will analyze your images simultaneously</p>
+                  <p className="analyze-hint">3 CNN models will analyze your images sequentially</p>
+                )}
+                {scanError && (
+                  <div className="scan-error-toast" style={{marginTop:'12px',padding:'12px 18px',background:'rgba(239,68,68,0.15)',border:'1px solid rgba(239,68,68,0.4)',borderRadius:'10px',color:'#fca5a5',fontSize:'0.9rem',textAlign:'center'}}>
+                    <AlertTriangle size={16} style={{marginRight:6,verticalAlign:'middle'}} />
+                    {scanError}
+                  </div>
                 )}
               </div>
             </section>
@@ -378,7 +428,7 @@ const Dashboard = () => {
                     <div className="f-map thermal-map">Nail Model</div>
                     <div className="f-map vascular-map">Averaging</div>
                   </div>
-                  <div className="scanning-text pulse-text">Running 3 CNN models in parallel...</div>
+                  <div className="scanning-text pulse-text">{scanProgress || 'Running 3 CNN models sequentially...'}</div>
                 </div>
               ) : showXAI ? (
                 <div className="xai-gradcam-view slide-up-fade">

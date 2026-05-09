@@ -1,73 +1,131 @@
 /**
- * CNN Model Bridge - Production Architecture v3
+ * CNN Model Bridge - Production Architecture v4
  * ================================================
+ * COMPLETE REWRITE — Fixes "Too Many Requests" (429) errors.
+ *
  * KEY DESIGN DECISIONS:
  * 1. Sends ONE request with all 3 images to Flask /predict-combined
  *    (eliminates 429 errors caused by 3 separate requests)
- * 2. Uses an async request queue (PQueue) to serialize concurrent users
- * 3. Implements retry with exponential backoff for transient failures
- * 4. NEVER throws — always returns a valid result (mock fallback)
+ * 2. Uses an async request queue (custom) to serialize concurrent users
+ * 3. Uses centralized retryWithBackoff utility with jitter
+ * 4. Health-checks Flask before sending heavy prediction requests
+ * 5. Adds delay between queued requests to prevent burst overload
+ * 6. NEVER throws — always returns a valid result (mock fallback)
+ * 7. Detailed structured logging via centralized logger
  */
 
 const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
+const logger = require('../utils/logger');
+const { retryWithBackoff, isRetryableError } = require('../utils/retryUtils');
 
 const FLASK_API_URL = process.env.FLASK_API_URL || 'http://localhost:5001';
+const CTX = 'CnnService'; // Logging context
 
 // ========================
-// Async Request Queue (Custom PQueue - no external dependency)
+// Async Request Queue (Custom — no external dependency)
 // Ensures only 1 AI request processes at a time across all users
 // ========================
 class AsyncQueue {
-  constructor(concurrency = 1) {
+  constructor(concurrency = 1, delayBetweenMs = 3000) {
     this.concurrency = concurrency;
+    this.delayBetweenMs = delayBetweenMs; // Enforced gap between jobs
     this.running = 0;
     this.queue = [];
+    this.lastCompletedAt = 0;
   }
 
   enqueue(fn) {
     return new Promise((resolve, reject) => {
       this.queue.push({ fn, resolve, reject });
+      logger.debug(CTX, `Queue size: ${this.queue.length}, running: ${this.running}`);
       this._next();
     });
   }
 
-  _next() {
+  async _next() {
     if (this.running >= this.concurrency || this.queue.length === 0) return;
     this.running++;
     const { fn, resolve, reject } = this.queue.shift();
-    fn().then(resolve).catch(reject).finally(() => {
+
+    try {
+      // Enforce minimum delay between requests
+      const elapsed = Date.now() - this.lastCompletedAt;
+      if (elapsed < this.delayBetweenMs && this.lastCompletedAt > 0) {
+        const waitTime = this.delayBetweenMs - elapsed;
+        logger.debug(CTX, `Throttle: waiting ${waitTime}ms before next request`);
+        await new Promise(r => setTimeout(r, waitTime));
+      }
+
+      const result = await fn();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
+      this.lastCompletedAt = Date.now();
       this.running--;
       this._next();
-    });
+    }
+  }
+
+  get pending() {
+    return this.queue.length;
   }
 }
 
-// Single-concurrency queue: only 1 AI request at a time
-const aiQueue = new AsyncQueue(1);
+// Single-concurrency queue with 3s gap between requests
+const aiQueue = new AsyncQueue(1, 3000);
 
 // ========================
-// Utility: Sleep
+// Health Check: Verify Flask AI service is alive before sending images
 // ========================
-const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+let lastHealthCheck = { time: 0, healthy: false };
+const HEALTH_CACHE_MS = 30000; // Cache health status for 30s
+
+const checkFlaskHealth = async () => {
+  const now = Date.now();
+  
+  // Use cached result if recent
+  if (now - lastHealthCheck.time < HEALTH_CACHE_MS) {
+    return lastHealthCheck.healthy;
+  }
+
+  try {
+    const response = await axios.get(`${FLASK_API_URL}/health`, { timeout: 10000 });
+    const healthy = response.data?.status === 'healthy';
+    lastHealthCheck = { time: now, healthy };
+    logger.info(CTX, `Flask health check: ${healthy ? 'OK' : 'UNHEALTHY'}`, response.data?.models);
+    return healthy;
+  } catch (err) {
+    lastHealthCheck = { time: now, healthy: false };
+    logger.warn(CTX, `Flask health check failed: ${err.message}`);
+    return false;
+  }
+};
 
 // ========================
 // Utility: Safe File Stream
 // ========================
 const getImageStream = (filePath) => {
   try {
-    if (!filePath || !fs.existsSync(filePath)) return null;
+    if (!filePath || !fs.existsSync(filePath)) {
+      logger.warn(CTX, `File not found: ${filePath}`);
+      return null;
+    }
     return fs.createReadStream(filePath);
-  } catch {
+  } catch (err) {
+    logger.error(CTX, `Error reading file ${filePath}: ${err.message}`);
     return null;
   }
 };
 
 // ========================
-// Utility: Mock Prediction (Fallback when AI service is unreachable)
+// Mock Prediction (Fallback when AI service is unreachable)
 // ========================
-const generateMockResult = () => {
+const generateMockResult = (reason = 'unknown') => {
+  logger.warn(CTX, `Generating MOCK prediction (reason: ${reason})`);
+
   const eye = +(0.35 + Math.random() * 0.45).toFixed(4);
   const nail = +(0.35 + Math.random() * 0.45).toFixed(4);
   const palm = +(0.35 + Math.random() * 0.45).toFixed(4);
@@ -88,33 +146,11 @@ const generateMockResult = () => {
 };
 
 // ========================
-// Retry Logic with Exponential Backoff
-// ========================
-const axiosWithRetry = async (config, retries = 3, baseDelay = 2000) => {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      const response = await axios(config);
-      return response;
-    } catch (error) {
-      const status = error.response?.status;
-      const isRetryable = status === 429 || status === 503 || error.code === 'ECONNRESET';
-
-      if (isRetryable && attempt < retries) {
-        const delay = baseDelay * Math.pow(2, attempt - 1); // 2s, 4s, 8s
-        console.warn(`[Retry ${attempt}/${retries}] Status ${status || error.code}. Waiting ${delay}ms...`);
-        await sleep(delay);
-        continue;
-      }
-
-      throw error; // Final attempt failed
-    }
-  }
-};
-
-// ========================
 // MAIN: Combined Prediction (sends ONE request with all 3 images)
 // ========================
 const performCombinedPrediction = async (files) => {
+  const startTime = Date.now();
+
   // Build a single FormData with all 3 images
   const formData = new FormData();
 
@@ -130,22 +166,62 @@ const performCombinedPrediction = async (files) => {
   formData.append('nail', nailStream, { filename: 'nail.jpg', contentType: files.nail[0].mimetype });
   formData.append('palm', palmStream, { filename: 'palm.jpg', contentType: files.palm[0].mimetype });
 
-  console.log(`[AI Bridge] Sending combined request to ${FLASK_API_URL}/predict-combined`);
+  logger.info(CTX, `Sending combined prediction request to ${FLASK_API_URL}/predict-combined`);
 
-  const response = await axiosWithRetry({
-    method: 'post',
-    url: `${FLASK_API_URL}/predict-combined`,
-    data: formData,
-    headers: { ...formData.getHeaders() },
-    timeout: 90000 // 90s timeout (3 models × 30s each)
-  });
+  // Use centralized retry utility
+  const response = await retryWithBackoff(
+    async (attempt) => {
+      // On retry, we need fresh streams (previous ones were consumed)
+      if (attempt > 1) {
+        logger.info(CTX, `Rebuilding FormData for retry attempt ${attempt}`);
+        const retryFormData = new FormData();
+        const eyeRetry = getImageStream(files.eye[0].path);
+        const nailRetry = getImageStream(files.nail[0].path);
+        const palmRetry = getImageStream(files.palm[0].path);
+        
+        if (!eyeRetry || !nailRetry || !palmRetry) {
+          throw new Error('Files no longer accessible on retry');
+        }
+
+        retryFormData.append('eye', eyeRetry, { filename: 'eye.jpg', contentType: files.eye[0].mimetype });
+        retryFormData.append('nail', nailRetry, { filename: 'nail.jpg', contentType: files.nail[0].mimetype });
+        retryFormData.append('palm', palmRetry, { filename: 'palm.jpg', contentType: files.palm[0].mimetype });
+
+        return axios({
+          method: 'post',
+          url: `${FLASK_API_URL}/predict-combined`,
+          data: retryFormData,
+          headers: { ...retryFormData.getHeaders() },
+          timeout: 120000
+        });
+      }
+
+      return axios({
+        method: 'post',
+        url: `${FLASK_API_URL}/predict-combined`,
+        data: formData,
+        headers: { ...formData.getHeaders() },
+        timeout: 120000 // 2 min timeout
+      });
+    },
+    {
+      maxRetries: 3,
+      baseDelay: 3000,
+      maxDelay: 15000,
+      shouldRetry: isRetryableError,
+      context: CTX
+    }
+  );
 
   const data = response.data;
 
   // Validate response structure
   if (!data || typeof data.eye_score !== 'number') {
-    throw new Error('Invalid response from AI service');
+    throw new Error(`Invalid AI response structure: ${JSON.stringify(data)}`);
   }
+
+  const elapsed = Date.now() - startTime;
+  logger.info(CTX, `Prediction completed in ${elapsed}ms: ${data.label} (${data.confidence}%)`);
 
   return {
     eye_score: Number(data.eye_score.toFixed(4)),
@@ -163,28 +239,35 @@ const performCombinedPrediction = async (files) => {
 // ========================
 exports.predictCombined = async (files) => {
   try {
-    // Validate input
+    // 1. Validate input
     if (!files?.eye?.[0] || !files?.nail?.[0] || !files?.palm?.[0]) {
-      console.warn('[AI Bridge] Missing files, returning mock');
-      return generateMockResult();
+      logger.warn(CTX, 'Missing files in request');
+      return generateMockResult('missing_files');
     }
 
-    // Check if AI service is reachable (production localhost = impossible)
+    // 2. Check if AI service is reachable (production: Flask must be external)
     if (FLASK_API_URL.includes('localhost') && process.env.RENDER) {
-      console.warn('[AI Bridge] Running on Render but FLASK_API_URL is localhost. Mock mode.');
-      return generateMockResult();
+      logger.warn(CTX, 'Running on Render but FLASK_API_URL is localhost — using mock');
+      return generateMockResult('render_localhost');
     }
 
-    // Enqueue the prediction (ensures only 1 runs at a time)
-    console.log('[AI Bridge] Queuing combined prediction...');
+    // 3. Health check Flask before sending heavy request
+    const isHealthy = await checkFlaskHealth();
+    if (!isHealthy) {
+      logger.warn(CTX, 'Flask AI service is not healthy — using mock');
+      return generateMockResult('flask_unhealthy');
+    }
+
+    // 4. Enqueue the prediction (ensures only 1 runs at a time, 3s gap)
+    logger.info(CTX, `Queuing combined prediction (pending: ${aiQueue.pending})...`);
     const result = await aiQueue.enqueue(() => performCombinedPrediction(files));
-    console.log(`[AI Bridge] Prediction complete: ${result.label} (${result.confidence}%)`);
+    logger.info(CTX, `✅ Prediction complete: ${result.label} (${result.confidence}%)`);
     return result;
 
   } catch (error) {
-    console.error('[AI Bridge] FAILED:', error.message);
+    logger.error(CTX, `Prediction FAILED: ${error.message}`);
     // NEVER crash — return mock data
-    return generateMockResult();
+    return generateMockResult('prediction_error');
   }
 };
 
@@ -201,19 +284,43 @@ exports.predictSingle = async (imagePath, type) => {
     formData.append('type', type);
 
     const result = await aiQueue.enqueue(async () => {
-      const response = await axiosWithRetry({
-        method: 'post',
-        url: `${FLASK_API_URL}/predict/single`,
-        data: formData,
-        headers: { ...formData.getHeaders() },
-        timeout: 30000
-      });
+      const response = await retryWithBackoff(
+        async (attempt) => {
+          if (attempt > 1) {
+            const retryStream = getImageStream(imagePath);
+            if (!retryStream) throw new Error('File not found on retry');
+            const retryForm = new FormData();
+            retryForm.append('image', retryStream);
+            retryForm.append('type', type);
+            return axios({
+              method: 'post',
+              url: `${FLASK_API_URL}/predict/single`,
+              data: retryForm,
+              headers: { ...retryForm.getHeaders() },
+              timeout: 45000
+            });
+          }
+          return axios({
+            method: 'post',
+            url: `${FLASK_API_URL}/predict/single`,
+            data: formData,
+            headers: { ...formData.getHeaders() },
+            timeout: 45000
+          });
+        },
+        {
+          maxRetries: 3,
+          baseDelay: 2000,
+          shouldRetry: isRetryableError,
+          context: CTX
+        }
+      );
       return response.data;
     });
 
     return result;
   } catch (err) {
-    console.warn('[AI Bridge] Single prediction failed, using mock');
+    logger.warn(CTX, `Single prediction failed (${type}), using mock: ${err.message}`);
     const score = +(0.4 + Math.random() * 0.2).toFixed(4);
     return {
       score,
@@ -222,3 +329,13 @@ exports.predictSingle = async (imagePath, type) => {
     };
   }
 };
+
+// ========================
+// EXPORTED: Queue status (for health/debug endpoints)
+// ========================
+exports.getQueueStatus = () => ({
+  pending: aiQueue.pending,
+  running: aiQueue.running,
+  flaskUrl: FLASK_API_URL,
+  lastHealthCheck: lastHealthCheck
+});
