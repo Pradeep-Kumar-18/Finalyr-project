@@ -1,0 +1,35 @@
+services:
+  # AI Inference Service (Flask + TensorFlow)
+  - type: web
+    name: hemoai-ai-service
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 180 app:app
+    envVars:
+      - key: PORT
+        value: 5001
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: "2"
+      - key: GUNICORN_CMD_ARGS
+        value: "--access-logfile - --error-logfile -"
+
+  # Node.js Backend Service
+  - type: web
+    name: hemoai-backend
+    env: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGO_URI
+        fromValue: MONGO_URI
+      - key: JWT_SECRET
+        generateValue: true
+      - key: FLASK_API_URL
+        fromService:
+          type: web
+          name: hemoai-ai-service
+          property: host
+      - key: NODE_ENV
+        value: production

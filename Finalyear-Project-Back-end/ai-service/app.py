@@ -12,6 +12,42 @@ FIXES in v2:
 """
 
 import os
+import sys
+import subprocess
+
+# ========================
+# Dependency Validation Guard
+# ========================
+REQUIRED_PACKAGES = {
+    'numpy': 'numpy',
+    'flask': 'flask',
+    'flask_cors': 'flask-cors',
+    'tensorflow': 'tensorflow',
+    'PIL': 'pillow'
+}
+
+def validate_dependencies():
+    missing = []
+    for module, package in REQUIRED_PACKAGES.items():
+        try:
+            __import__(module)
+        except ImportError:
+            missing.append(package)
+    
+    if missing:
+        print(f"\n[!] CRITICAL ERROR: Missing required packages: {', '.join(missing)}")
+        print("[*] Attempting to fix environment...")
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install"] + missing)
+            print("[OK] Successfully installed missing packages. Please restart the app.")
+            sys.exit(0)
+        except Exception as e:
+            print(f"[ERROR] Auto-installation failed: {e}")
+            print(f"[*] Please run: pip install -r requirements.txt")
+            sys.exit(1)
+
+validate_dependencies()
+
 import gc
 import time
 import threading
@@ -77,72 +113,103 @@ inference_semaphore = threading.Semaphore(1)
 # ========================
 # Load Models ONCE at Startup (Global Scope)
 # ========================
+print("\n" + "=" * 50)
+print("[HemoAI] SYSTEM INITIALIZATION")
+print(f"[HemoAI] Model Directory: {MODEL_DIR}")
 print("=" * 50)
-print("[HemoAI] Loading AI Models into memory...")
-print("=" * 50)
+
+# Check if model directory exists and has files
+if not os.path.exists(MODEL_DIR):
+    print(f"[CRITICAL] Model directory NOT FOUND: {MODEL_DIR}")
+    os.makedirs(MODEL_DIR, exist_ok=True)
+    print("[HemoAI] Created empty models directory. Please upload .h5 files.")
+
+model_files = [f for f in os.listdir(MODEL_DIR) if f.endswith('.h5')]
+print(f"[HemoAI] Found {len(model_files)} model files: {model_files}")
 
 eye_model = None
 nail_model = None
 palm_model = None
 
-try:
-    eye_model = load_model(os.path.join(MODEL_DIR, "eye_model_final.h5"))
-    print("[OK] Eye model loaded")
-except Exception as e:
-    print(f"[ERROR] Eye model: {e}")
+def load_hemo_model(name, filename):
+    path = os.path.join(MODEL_DIR, filename)
+    if not os.path.exists(path):
+        print(f"[ERROR] {name} model file MISSING: {filename}")
+        return None
+    try:
+        start = time.time()
+        print(f"[*] Loading {name} model...")
+        model = load_model(path)
+        print(f"[OK] {name} loaded in {time.time()-start:.2f}s")
+        return model
+    except Exception as e:
+        print(f"[FAIL] {name} failed: {str(e)}")
+        return None
 
-try:
-    nail_model = load_model(os.path.join(MODEL_DIR, "nail_model_final.h5"))
-    print("[OK] Nail model loaded")
-except Exception as e:
-    print(f"[ERROR] Nail model: {e}")
-
-try:
-    palm_model = load_model(os.path.join(MODEL_DIR, "palm_model_final.h5"))
-    print("[OK] Palm model loaded")
-except Exception as e:
-    print(f"[ERROR] Palm model: {e}")
+eye_model = load_hemo_model("Eye", "eye_model_final.h5")
+nail_model = load_hemo_model("Nail", "nail_model_final.h5")
+palm_model = load_hemo_model("Palm", "palm_model_final.h5")
 
 # Force garbage collection after model loading
 gc.collect()
 
 print("=" * 50)
-print("[HemoAI] All models loaded. Service ready.")
-print("=" * 50)
-
+print("[HemoAI] SERVICE STATUS: " + ("READY" if all([eye_model, nail_model, palm_model]) else "PARTIAL/OFFLINE"))
+print("=" * 50 + "\n")
 
 def preprocess_image(img_file):
     """Preprocess uploaded image for MobileNetV2 inference."""
-    img = Image.open(img_file).convert("RGB")
-    img = img.resize(IMG_SIZE)
-    img_array = np.array(img, dtype=np.float32)
-    del img  # Free PIL image immediately
-    img_array = preprocess_input(img_array)
-    img_array = np.expand_dims(img_array, axis=0)
-    return img_array
-
+    try:
+        img = Image.open(img_file).convert("RGB")
+        img = img.resize(IMG_SIZE)
+        img_array = np.array(img, dtype=np.float32)
+        del img
+        img_array = preprocess_input(img_array)
+        img_array = np.expand_dims(img_array, axis=0)
+        return img_array
+    except Exception as e:
+        print(f"[PREPROCESS ERROR] {str(e)}")
+        return None
 
 def safe_predict(model, img_file):
     """Thread-safe prediction on a single image."""
+    if model is None:
+        raise ValueError("Model not loaded")
     img_array = preprocess_image(img_file)
+    if img_array is None:
+        raise ValueError("Image preprocessing failed")
     prediction = model.predict(img_array, verbose=0)[0][0]
-    del img_array  # Free memory immediately
+    del img_array
+    gc.collect() # Aggressive cleanup
     return float(prediction)
 
 
 # ========================
-# Health Check
+# Core Routes
 # ========================
+
+@app.route("/", methods=["GET"])
+def home():
+    """Root route to confirm service is running."""
+    return jsonify({
+        "message": "HemoVision AI Inference Service",
+        "status": "online",
+        "endpoints": ["/", "/health", "/predict-combined", "/predict/single"],
+        "models_ready": all([eye_model, nail_model, palm_model])
+    })
+
 @app.route("/health", methods=["GET"])
 def health_check():
+    """Standard health check for Render/K8s."""
+    status = "healthy" if all([eye_model, nail_model, palm_model]) else "partial"
     return jsonify({
-        "status": "healthy",
+        "status": status,
         "models": {
             "eye": eye_model is not None,
             "nail": nail_model is not None,
             "palm": palm_model is not None
         },
-        "uptime": time.time()
+        "uptime": round(time.time(), 2)
     })
 
 

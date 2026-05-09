@@ -3,6 +3,11 @@
 
 # Environment variables
 **/.env
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
 
 # Uploaded diagnostic images
 Finalyear-Project-Back-end/uploads/
