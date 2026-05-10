@@ -100,70 +100,60 @@ const Dashboard = () => {
 
     const token = localStorage.getItem('token');
     const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-    const MAX_RETRIES = 2;
-
-    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      try {
+    
+    try {
         const formData = new FormData();
         formData.append('eye', eyeFile);
         formData.append('nail', nailFile);
         formData.append('palm', palmFile);
 
-        if (attempt > 1) {
-          setScanProgress(`Retrying analysis (attempt ${attempt}/${MAX_RETRIES})...`);
-          console.warn(`[HemoAI] Retry attempt ${attempt}/${MAX_RETRIES}`);
-        } else {
-          setScanProgress('Running AI models: Eye → Palm → Nail...');
-        }
-
-        console.log(`[HemoAI] Calling API: ${baseUrl}/scans/combined (attempt ${attempt})`);
+        setScanProgress('Initializing neural network... (Eye Scan)');
+        
+        // Timer for fake progress increments within stages
+        const progressInterval = setInterval(() => {
+          setScanProgress(prev => {
+            if (prev.includes('Eye Scan')) return 'Analyzing Conjunctiva features...';
+            if (prev.includes('Conjunctiva')) return 'Calculating hemoglobin density (Eye)...';
+            if (prev.includes('(Eye)')) return 'Step 1 complete. Initializing Palm Scan...';
+            if (prev.includes('Palm Scan')) return 'Analyzing Palm vascular patterns...';
+            if (prev.includes('vascular')) return 'Calculating hemoglobin density (Palm)...';
+            if (prev.includes('(Palm)')) return 'Step 2 complete. Initializing Nail Scan...';
+            if (prev.includes('Nail Scan')) return 'Analyzing Nail Bed transparency...';
+            if (prev.includes('transparency')) return 'Calculating hemoglobin density (Nail)...';
+            if (prev.includes('(Nail)')) return 'Finalizing combined AI report...';
+            return prev;
+          });
+        }, 5000);
 
         const response = await axios.post(`${baseUrl}/scans/combined`, formData, {
           headers: {
             'Content-Type': 'multipart/form-data',
             'Authorization': `Bearer ${token}`
           },
-          timeout: 180000 // 3 min timeout
+          timeout: 300000 // 5 min timeout for sequential heavy analysis
         });
 
-        if (response.data.success) {
-          const result = response.data.data;
-          setScanResult(result);
-          setScanProgress('Analysis complete!');
+        clearInterval(progressInterval);
 
+        if (response.data.success) {
+          setScanResult(response.data.data);
+          setScanProgress('Analysis complete! Generating report...');
           setTimeout(() => {
             setScanStatus('results');
             setScanProgress('');
           }, 1500);
-
-          isSubmitting.current = false;
-          return; // Success — exit retry loop
         }
-      } catch (err) {
-        console.error(`[HemoAI] Scan attempt ${attempt} failed:`, err);
-        const status = err.response?.status;
-        const isRetryable = [429, 502, 503, 504].includes(status) || err.code === 'ECONNABORTED';
-
-        if (isRetryable && attempt < MAX_RETRIES) {
-          const delay = 3000 * attempt; // 3s, 6s
-          setScanProgress(`Server busy (${status || 'timeout'}). Retrying in ${delay/1000}s...`);
-          await new Promise(r => setTimeout(r, delay));
-          continue;
-        }
-
-        // Final failure
-        const errorMessage = err.response?.data?.error
-          || (err.code === 'ECONNABORTED' ? 'Request timed out. The AI service may be starting up — please try again in 30 seconds.'
-          : 'Error processing scan. Please ensure the backend and AI service are running.');
+    } catch (err) {
+        console.error('[HemoAI] Scan failed:', err);
+        const errorMessage = err.response?.data?.error 
+          || (err.code === 'ECONNABORTED' ? 'The server is taking too long. The AI service may be starting up on Render — please try one more time.' : 'Analysis failed. Please check your internet connection.');
+        
         setScanError(errorMessage);
         setScanStatus('idle');
         setScanProgress('');
+    } finally {
         isSubmitting.current = false;
-        return;
-      }
     }
-
-    isSubmitting.current = false;
   };
 
   const closeScan = () => {

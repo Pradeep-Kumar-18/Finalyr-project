@@ -4,7 +4,7 @@ services:
     name: hemoai-ai-service
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 180 app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 600 app:app
     envVars:
       - key: PORT
         value: 5001

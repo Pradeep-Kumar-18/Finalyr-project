@@ -1,23 +1,19 @@
-# HemoVision AI - Strictly Compatible Dependencies
-# ===============================================
+# HemoVision AI - Production Optimized Dependencies (v3)
+# ====================================================
 
-# Core Frameworks
-flask==3.1.1
-flask-cors==5.0.1
-tensorflow==2.19.0
+# Core Web
+flask==3.0.2
+flask-cors==4.0.0
+gunicorn==21.2.0
 
-# Numerical & Data
-numpy==2.1.3
-h5py==3.16.0
-keras==3.14.0
+# Memory-Efficient TensorFlow (CPU only)
+tensorflow-cpu==2.15.0
 
-# Image Processing
-pillow==11.3.0
-opencv-python-headless==4.11.0.86
+# Numerical & Image
+numpy==1.26.4
+pillow==10.2.0
+h5py==3.10.0
 
-# Utilities & Deployment
-requests==2.33.1
-gunicorn==23.0.0
-setuptools==82.0.1
-wheel==0.47.0
-pip==25.0.1
+# Utilities
+requests==2.31.0
+python-dotenv==1.0.1

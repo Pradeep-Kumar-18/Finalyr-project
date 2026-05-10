@@ -49,26 +49,28 @@ exports.createCombinedScan = async (req, res, next) => {
     const nailImageUrl = `${baseUrl}/uploads/${req.files.nail[0].filename}`;
     const palmImageUrl = `${baseUrl}/uploads/${req.files.palm[0].filename}`;
 
-    // 4. Call AI service (queued, retried, fail-safe)
-    logger.info(CTX, `[${requestId}] Calling AI prediction service...`);
+    // 4. Call AI service (Sequential, Queued, Retried)
+    logger.info(CTX, `[${requestId}] Calling AI sequential service...`);
     const predictionStartTime = Date.now();
+    
+    // This now runs Eye -> Wait -> Palm -> Wait -> Nail
     const prediction = await cnnService.predictCombined(req.files);
+    
     const predictionDuration = Date.now() - predictionStartTime;
     
-    logger.info(CTX, `[${requestId}] AI prediction completed in ${predictionDuration}ms`, {
+    logger.info(CTX, `[${requestId}] AI Analysis completed in ${predictionDuration}ms`, {
       label: prediction.label,
-      confidence: prediction.confidence,
-      isMock: prediction.isMock || false
+      confidence: prediction.confidence
     });
 
-    // 5. Sanitize all values (prevent NaN/undefined from crashing MongoDB)
-    const eyeScore = Number(prediction.eye_score) || 0.5;
-    const nailScore = Number(prediction.nail_score) || 0.5;
-    const palmScore = Number(prediction.palm_score) || 0.5;
-    const finalScore = Number(prediction.final_score) || 0.5;
-    const confidence = Number(prediction.confidence) || 85;
-    const label = prediction.label || (finalScore >= 0.5 ? 'Normal' : 'Anemia');
-    const status = prediction.status || (finalScore >= 0.5 ? 'Normal' : 'Anemic');
+    // 5. Sanitize and Validate Values
+    const eyeScore = Number(prediction.eye_score) || 0;
+    const nailScore = Number(prediction.nail_score) || 0;
+    const palmScore = Number(prediction.palm_score) || 0;
+    const finalScore = Number(prediction.final_score) || 0;
+    const confidence = Number(prediction.confidence) || 0;
+    const label = prediction.label || 'Unknown';
+    const status = prediction.status || 'Unknown';
 
     // 6. Save to database
     const scan = await Scan.create({
@@ -86,36 +88,36 @@ exports.createCombinedScan = async (req, res, next) => {
       palmImageUrl
     });
 
-    logger.info(CTX, `[${requestId}] Scan saved to database: ${scan._id}`);
+    logger.info(CTX, `[${requestId}] Scan result saved: ${scan._id}`);
 
-    // 7. Cleanup uploaded files (async, non-blocking)
-    // Schedule cleanup after a short delay to ensure response is sent first
-    setTimeout(() => {
-      cleanupUploadedFiles(req.files);
-    }, 5000);
+    // 7. Immediate cleanup of local files after DB save
+    cleanupUploadedFiles(req.files);
 
-    // 8. Return structured response
+    // 8. Return response
     res.status(201).json({ 
       success: true, 
       data: scan,
       meta: {
         processingTime: predictionDuration,
-        isMock: prediction.isMock || false
+        queuePosition: 0
       }
     });
 
   } catch (err) {
-    logger.error(CTX, `[${requestId}] Combined scan FAILED: ${err.message}`, err.stack);
+    logger.error(CTX, `[${requestId}] Combined scan CRITICAL FAILURE: ${err.message}`);
     
-    // Cleanup files even on error
-    cleanupUploadedFiles(req.files);
+    // Ensure cleanup even on crash
+    if (req.files) cleanupUploadedFiles(req.files);
 
-    // NEVER return raw error messages to the client
-    const statusCode = err.status || 500;
-    res.status(statusCode).json({ 
+    // Provide meaningful error to frontend
+    const errorMsg = err.message.includes('AI Service') 
+      ? 'AI Analysis service is busy or starting up. Please try again in 1 minute.'
+      : 'Analysis failed due to a server error. Please try again.';
+
+    res.status(err.status || 500).json({ 
       success: false, 
-      error: 'Analysis could not be completed. Please try again.',
-      requestId // Include for debugging
+      error: errorMsg,
+      requestId 
     });
   }
 };
